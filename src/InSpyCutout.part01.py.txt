@@ -29,6 +29,9 @@
         self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
         self.canvas.bind("<Double-Button-1>", self._on_double_click)
         self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        # Windows maps many tilt-wheel / horizontal-scroll events to Shift+MouseWheel.
+        # Handle that separately so a slight wheel tilt never changes zoom while panning.
+        self.canvas.bind("<Shift-MouseWheel>", self._on_horizontal_wheel)
         self.canvas.bind("<Button-4>", self._on_linux_wheel)
         self.canvas.bind("<Button-5>", self._on_linux_wheel)
         self.canvas.bind("<Motion>", self._on_pointer_motion)
