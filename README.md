@@ -30,6 +30,9 @@ The intended workflow is simple:
 - Japanese / English UI toggle
 - Output organized as `output/<source filename>/...`
 - Automatic Paint.NET detection (Microsoft Store / desktop) plus Windows “Open with…” fallback
+- EXIF orientation is applied automatically for camera/smartphone images
+- Existing source transparency is preserved and cannot be accidentally made opaque by the generated mask
+- External/edited masks with the wrong dimensions are rejected instead of silently resized
 
 ## Windows quick start
 
