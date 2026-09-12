@@ -1,6 +1,11 @@
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath $PSScriptRoot
 
+# Keep a full setup transcript in the app folder so very long pip/build output
+# is still available even if the console window scrolls it away.
+$setupLog = Join-Path $PSScriptRoot "setup.log"
+try { Start-Transcript -Path $setupLog -Force | Out-Null } catch {}
+
 # Keep persistent caches inside the application folder so removing the folder
 # removes the virtual environment, model files, and caches together.
 $cacheRoot = Join-Path $PSScriptRoot "cache"
@@ -131,7 +136,10 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Setup complete." -ForegroundColor Green
+Write-Host "Setup log: $setupLog"
 Write-Host "Launch with Launch_GUI.bat or the desktop shortcut."
+
+try { Stop-Transcript | Out-Null } catch {}
 
 $answer = Read-Host "Launch InSpyCutout now? [Y/n]"
 if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^[Yy]') {
