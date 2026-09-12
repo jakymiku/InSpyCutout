@@ -13,6 +13,9 @@ set "XDG_CACHE_HOME=%~dp0cache\xdg"
 if not exist ".venv\Scripts\pythonw.exe" (
   echo InSpyCutout environment is not installed yet.
   echo Starting setup...
+  rem Setup is being called by the launcher, so let this script perform the one
+  rem and only GUI launch after setup completes.
+  set "INSPYCUTOUT_SETUP_NO_LAUNCH=1"
   call "%~dp0Setup.bat"
   if errorlevel 1 exit /b 1
 )
