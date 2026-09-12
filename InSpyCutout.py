@@ -38,6 +38,8 @@ STRINGS = {
         "white_keep": "白(残す)", "black_remove": "黒(消す)", "invert_color": "色反転 (X)",
         "size": "サイズ", "paint_help": "左=選択色 / 右=反対色 / Space押下中=一時移動 / 中ボタンドラッグ=移動",
         "panel_original": "元画像", "panel_mask": "マスク（ここに直接ペイント）", "panel_result": "透過プレビュー",
+        "sync_views": "マスク / 透過プレビューの表示を同期",
+        "view_sync_on": "マスク / 透過プレビュー同期: ON", "view_sync_off": "マスク / 透過プレビュー同期: OFF",
         "hint_view": "ホイール: 拡大縮小 / 左ドラッグ: 移動 / 中ボタンドラッグ: 移動 / ダブルクリック: フィット",
         "hint_paint": "ペイント: 左=選択色 / 右=反対色 / Space中・中ボタン=移動 / ホイール=ズーム",
         "switch_language": "English", "source": "元画像", "mask": "マスク", "none": "なし",
@@ -82,6 +84,8 @@ STRINGS = {
         "white_keep": "White (Keep)", "black_remove": "Black (Remove)", "invert_color": "Swap Color (X)",
         "size": "Size", "paint_help": "Left=selected color / Right=opposite / Hold Space or middle-drag to pan",
         "panel_original": "Original", "panel_mask": "Mask (paint here)", "panel_result": "Transparency Preview",
+        "sync_views": "Sync Mask / Transparency Preview view",
+        "view_sync_on": "Mask / preview view sync: ON", "view_sync_off": "Mask / preview view sync: OFF",
         "hint_view": "Wheel: zoom / Left-drag: pan / Middle-drag: pan / Double-click: fit",
         "hint_paint": "Paint: Left=selected / Right=opposite / Space or middle-drag=pan / Wheel=zoom",
         "switch_language": "日本語", "source": "Source", "mask": "Mask", "none": "none",
@@ -304,6 +308,42 @@ class ZoomImagePane(ttk.LabelFrame):
         if redraw:
             self._draw()
 
+    def export_view_state(self):
+        """Return absolute zoom plus the image-space point at the canvas center."""
+        if self.base_image is None:
+            return None
+        scale = self._current_scale()
+        left, top = self._image_top_left(scale)
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        center_x = (cw / 2.0 - left) / scale
+        center_y = (ch / 2.0 - top) / scale
+        return scale, center_x, center_y
+
+    def import_view_state(self, state, redraw: bool = True):
+        """Apply a linked view while keeping the same image-space center and zoom."""
+        if self.base_image is None or state is None:
+            return
+        scale, center_x, center_y = state
+        fit = max(0.01, self._fit_scale())
+        self.user_scale = max(0.05, min(30.0, float(scale) / fit))
+        actual_scale = self._current_scale()
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        iw, ih = self.base_image.size
+        centered_left = (cw - iw * actual_scale) / 2.0
+        centered_top = (ch - ih * actual_scale) / 2.0
+        desired_left = cw / 2.0 - float(center_x) * actual_scale
+        desired_top = ch / 2.0 - float(center_y) * actual_scale
+        self.pan_x = desired_left - centered_left
+        self.pan_y = desired_top - centered_top
+        if redraw:
+            self._draw()
+
+    def _notify_view_changed(self):
+        if self.app:
+            self.app.sync_linked_view_from(self)
+
     def _fit_scale(self) -> float:
         if self.base_image is None:
             return 1.0
@@ -430,6 +470,7 @@ class ZoomImagePane(ttk.LabelFrame):
         self.pan_x = self._drag_pan_start[0] + dx
         self.pan_y = self._drag_pan_start[1] + dy
         self._draw()
+        self._notify_view_changed()
 
     def _left_should_pan(self) -> bool:
         if not self.app:
@@ -548,9 +589,15 @@ class ZoomImagePane(ttk.LabelFrame):
             )
 
     def _on_double_click(self, _event=None):
+        # In Paint mode, a double-click is still a paint action. Do not unexpectedly
+        # reset/fit the mask view after the first click has already painted a stroke.
+        if self.editable and self.app and self.app.interaction_mode.get() == "paint" and not self.app.space_down:
+            return "break"
         if self._drag_mode == "paint":
-            return
+            return "break"
         self.reset_view()
+        self._notify_view_changed()
+        return "break"
 
     def _zoom_at(self, x: float, y: float, zoom_factor: float):
         if self.base_image is None:
@@ -574,6 +621,7 @@ class ZoomImagePane(ttk.LabelFrame):
         self.pan_x = x - img_x * new_scale - centered_left
         self.pan_y = y - img_y * new_scale - centered_top
         self._draw()
+        self._notify_view_changed()
 
     def _on_mousewheel(self, event):
         # Do not zoom while the user is actively panning. This also prevents
@@ -685,6 +733,9 @@ class App(tk.Tk):
         self._stroke_dirty = False
         self._painting_active = False
         self.paint_preview_ms = max(50, cfg_get(self.cfg, "ui", "paint_preview_ms", 90, int))
+        self.sync_mask_preview = tk.BooleanVar(
+            value=as_bool(cfg_get(self.cfg, "ui", "sync_mask_preview", "1"))
+        )
         self.max_history = 20
 
         self.gamma_var = tk.DoubleVar(value=cfg_get(self.cfg, "defaults", "alpha_gamma", 0.72, float))
@@ -801,6 +852,19 @@ class App(tk.Tk):
         self._refresh_mask_source_label()
         self._refresh_editor_combo()
 
+        # The bottom-left status text is not a widget registered through _iw().
+        # If the most recent status came from the view-sync toggle, translate that
+        # transient message too when switching UI languages.
+        current_status = self.status.get()
+        for key in ("view_sync_on", "view_sync_off"):
+            known = {
+                STRINGS.get("ja", {}).get(key, ""),
+                STRINGS.get("en", {}).get(key, ""),
+            }
+            if current_status in known:
+                self.status.set(self.tr(key))
+                break
+
     def _build_ui(self):
         top = ttk.Frame(self, padding=8)
         top.pack(fill="x")
@@ -858,6 +922,17 @@ class App(tk.Tk):
         ttk.Button(paintbar, text="Undo (Ctrl+Z)", command=self.undo_paint).pack(side="left", padx=3)
         ttk.Button(paintbar, text="Redo (Ctrl+Y)", command=self.redo_paint).pack(side="left", padx=3)
         self._iw(ttk.Label(paintbar), "paint_help").pack(side="left", padx=(12, 0))
+
+        viewbar = ttk.Frame(self, padding=(12, 0, 12, 0))
+        viewbar.pack(fill="x")
+        self._iw(
+            ttk.Checkbutton(
+                viewbar,
+                variable=self.sync_mask_preview,
+                command=self.on_view_sync_changed,
+            ),
+            "sync_views",
+        ).pack(side="right")
 
         previews = ttk.Frame(self, padding=8)
         previews.pack(fill="both", expand=True)
@@ -925,6 +1000,35 @@ class App(tk.Tk):
             pane = getattr(self, pane_name, None)
             if pane:
                 pane._update_cursor_style()
+
+    def sync_linked_view_from(self, source_pane):
+        """Keep the mask and transparency preview on the same image region when enabled."""
+        if not self.sync_mask_preview.get():
+            return
+        mask = getattr(self, "mask_panel", None)
+        result = getattr(self, "result_panel", None)
+        if source_pane is mask:
+            target = result
+        elif source_pane is result:
+            target = mask
+        else:
+            return
+        if target is None or source_pane.base_image is None or target.base_image is None:
+            return
+        target.import_view_state(source_pane.export_view_state())
+
+    def on_view_sync_changed(self):
+        enabled = bool(self.sync_mask_preview.get())
+        if enabled:
+            # When sync is enabled, make the transparency preview immediately match
+            # the mask view (or the reverse if only the result currently has an image).
+            source = self.mask_panel if self.mask_panel.base_image is not None else self.result_panel
+            self.sync_linked_view_from(source)
+        if not self.cfg.has_section("ui"):
+            self.cfg.add_section("ui")
+        self.cfg["ui"]["sync_mask_preview"] = "1" if enabled else "0"
+        self._write_cfg()
+        self.status.set(self.tr("view_sync_on" if enabled else "view_sync_off"))
 
     def set_interaction_mode(self, mode: str):
         if mode not in {"move", "paint"}:
@@ -1396,6 +1500,7 @@ class App(tk.Tk):
         if not self.cfg.has_section("ui"):
             self.cfg.add_section("ui")
         self.cfg["ui"]["language"] = self.language
+        self.cfg["ui"]["sync_mask_preview"] = "1" if self.sync_mask_preview.get() else "0"
         if not self.cfg.has_section("paint"):
             self.cfg.add_section("paint")
         self.cfg["paint"]["mode"] = self.interaction_mode.get()
