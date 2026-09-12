@@ -127,6 +127,12 @@ Two items may remain outside that folder:
 - **Python 3.11** if Setup installed it. Remove it manually from Windows Settings only if you do not use it elsewhere.
 - **Desktop shortcut**. Delete it manually if it remains after removing the application folder.
 
+## Maintenance / support
+
+This project was developed with substantial assistance from AI tools and is maintained as a personal project.
+
+Bug reports and issues may not receive an immediate response. Depending on the problem, available time, and difficulty of the fix, a reported bug may take a long time to address or may not be fixed at all. No specific response time, fix, or continued maintenance is guaranteed.
+
 ## Credits
 
 Background removal is powered by [transparent-background](https://github.com/plemeri/transparent-background) and [InSPyReNet](https://github.com/plemeri/InSPyReNet).
