@@ -1,33 +1,3 @@
-        self._show_brush_cursor(event.x, event.y)
-
-    def _on_right_release(self, _event):
-        if self._drag_mode == "paint" and self.app:
-            self.app.end_paint_stroke()
-        self._drag_mode = None
-        self._paint_button = None
-        self._last_paint_point = None
-
-    def _paint_at_event(self, event, button: int):
-        if not self.app:
-            return
-        point = self.canvas_to_image(event.x, event.y)
-        if point is None:
-            self._last_paint_point = None
-            return
-        previous = self._last_paint_point
-        self.app.paint_mask(previous, point, button=button)
-        # Immediate canvas-only feedback: this is intentionally separate from the
-        # expensive alpha/composite refresh, so the brush follows the pointer smoothly.
-        self._draw_paint_overlay(previous, point, button)
-        self._last_paint_point = point
-
-    def _draw_paint_overlay(self, start, end, button: int):
-        if not self.app or self.base_image is None:
-            return
-        selected = self.app.brush_color.get()
-        color_name = selected if button == 1 else ("black" if selected == "white" else "white")
-        fill = "#ffffff" if color_name == "white" else "#000000"
-        outline = "#00e5ff" if color_name == "white" else "#ff4d6d"
         size_img = max(1, min(200, int(self.app.brush_size_var.get())))
         width = max(1, int(round(size_img * self._current_scale())))
         exy = self.image_to_canvas(*end)
@@ -159,6 +129,8 @@ class App(tk.Tk):
         self.raw_mask: Image.Image | None = None
         self.processed_mask: Image.Image | None = None
         self.result_rgba: Image.Image | None = None
+        self.mask_source_kind = "none"
+        self.mask_source_detail: str | None = None
         self.mask_source_label = tk.StringVar(value=f"{self.tr('mask')}: {self.tr('none')}")
         self.status = tk.StringVar(value=self.tr("ready"))
         self.remover = None
@@ -183,13 +155,20 @@ class App(tk.Tk):
         self.interaction_mode = tk.StringVar(value=cfg_get(self.cfg, "paint", "mode", "move"))
         self.brush_color = tk.StringVar(value=cfg_get(self.cfg, "paint", "brush_color", "white"))
         self.brush_size_var = tk.IntVar(value=cfg_get(self.cfg, "paint", "brush_size", 32, int))
-        self.editor_mode = tk.StringVar(value=cfg_get(self.cfg, "editor", "mode", "paintnet_store"))
+        editor_mode = cfg_get(self.cfg, "editor", "mode", "auto").strip()
+        if editor_mode == "windows_default":
+            editor_mode = "windows_open_with"
+        if editor_mode not in EDITOR_MODES:
+            editor_mode = "auto"
+        self.editor_mode = tk.StringVar(value=editor_mode)
+        self.editor_display = tk.StringVar()
         self.paintnet_aumid = cfg_get(
             self.cfg,
             "editor",
             "paintnet_aumid",
             "dotPDNLLC.paint.net_h55e3w7q8jbva!dotPDNLLC.paint.net",
         )
+        self.paintnet_desktop_path = cfg_get(self.cfg, "editor", "paintnet_desktop_path", "").strip().strip('"')
 
         self._build_ui()
         self._setup_var_traces()
@@ -213,8 +192,80 @@ class App(tk.Tk):
             pass
         return widget
 
+    def _set_mask_source(self, kind: str, detail: str | None = None):
+        self.mask_source_kind = kind
+        self.mask_source_detail = detail
+        self._refresh_mask_source_label()
+
+    def _refresh_mask_source_label(self):
+        kind = getattr(self, "mask_source_kind", "none")
+        detail = getattr(self, "mask_source_detail", None)
+        if kind == "ai":
+            value = self.tr("mask_ai")
+        elif kind == "edited":
+            value = self.tr("mask_edited")
+            if detail:
+                value += f" ({detail})"
+        elif kind == "file":
+            value = detail or self.tr("none")
+        else:
+            value = self.tr("none")
+        self.mask_source_label.set(f"{self.tr('mask')}: {value}")
+
+    def _editor_mode_label(self, mode: str | None = None) -> str:
+        mode = mode or self.editor_mode.get()
+        return self.tr(EDITOR_MODE_KEYS.get(mode, "editor_mode_auto"))
+
+    def _refresh_editor_combo(self):
+        combo = getattr(self, "editor_combo", None)
+        if combo is None:
+            return
+        labels = [self.tr(EDITOR_MODE_KEYS[m]) for m in EDITOR_MODES]
+        combo.configure(values=labels)
+        self.editor_display.set(self._editor_mode_label())
+
+    def _on_editor_combo_selected(self, _event=None):
+        selected = self.editor_display.get()
+        for mode in EDITOR_MODES:
+            if selected == self.tr(EDITOR_MODE_KEYS[mode]):
+                self.editor_mode.set(mode)
+                break
+        self.save_editor_mode()
+
     def toggle_language(self):
         self.language = "en" if self.language == "ja" else "ja"
         if not self.cfg.has_section("ui"):
             self.cfg.add_section("ui")
         self.cfg["ui"]["language"] = self.language
+        self._write_cfg()
+        self.apply_language()
+
+    def apply_language(self):
+        for widget, key in self._i18n_widgets:
+            try:
+                widget.configure(text=self.tr(key))
+            except Exception:
+                pass
+        self.language_button.configure(text=self.tr("switch_language"))
+        for pane in (getattr(self, "original_panel", None), getattr(self, "mask_panel", None), getattr(self, "result_panel", None)):
+            if pane:
+                pane.update_language()
+        if getattr(self, "original_panel", None):
+            self.original_panel.configure(text=self.tr("panel_original"))
+            self.mask_panel.configure(text=self.tr("panel_mask"))
+            self.result_panel.configure(text=self.tr("panel_result"))
+        if self.source_path:
+            self.path_label.configure(text=f"{self.tr('source')}: {self.source_path}")
+        else:
+            self.path_label.configure(text=f"{self.tr('source')}: {self.tr('none')}")
+        self._refresh_mask_source_label()
+        self._refresh_editor_combo()
+
+    def _build_ui(self):
+        top = ttk.Frame(self, padding=8)
+        top.pack(fill="x")
+
+        for key, command, padx in [
+            ("open_image", self.choose_source, 4), ("regenerate", self.generate_ai_mask, 4),
+            ("load_mask", self.choose_mask, 4), ("edit_external", self.export_mask_for_edit, 4),
+            ("reload_edit", self.reload_edit_mask, 4), ("save", self.save_all, 14),
