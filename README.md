@@ -4,6 +4,8 @@
 
 [日本語 README](README_ja.md)
 
+![InSpyCutout screenshot](assets/InSpyCutout_preview.webp)
+
 InSpyCutout is designed for a simple workflow: generate a foreground mask automatically, make small corrections, and save a transparent PNG. It works with anime/illustrations, AI-generated images, and many photo-style images.
 
 ## Features
