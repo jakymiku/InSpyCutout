@@ -98,7 +98,10 @@
     def load_source(self, path: Path, auto_generate=True):
         try:
             self.source_path = path
-            self.source_rgba = Image.open(path).convert("RGBA")
+            # Apply EXIF orientation before converting to RGBA. Smartphone/camera images
+            # often store pixels sideways and rely on EXIF Orientation for display.
+            with Image.open(path) as opened:
+                self.source_rgba = ImageOps.exif_transpose(opened).convert("RGBA")
             self.raw_mask = None
             self.processed_mask = None
             self.result_rgba = None
@@ -127,9 +130,25 @@
 
     def load_mask(self, path: Path, source_kind="file"):
         try:
-            mask = Image.open(path).convert("L")
+            with Image.open(path) as opened:
+                mask = ImageOps.exif_transpose(opened).convert("L")
             if mask.size != self.source_rgba.size:
-                mask = mask.resize(self.source_rgba.size, Image.Resampling.LANCZOS)
+                expected_w, expected_h = self.source_rgba.size
+                actual_w, actual_h = mask.size
+                messagebox.showerror(
+                    APP_TITLE,
+                    self.tr(
+                        "mask_size_mismatch",
+                        expected_w=expected_w,
+                        expected_h=expected_h,
+                        actual_w=actual_w,
+                        actual_h=actual_h,
+                    ),
+                )
+                self.status.set(
+                    f"Mask size mismatch: {actual_w}x{actual_h} != {expected_w}x{expected_h}"
+                )
+                return
             self.raw_mask = mask
             self._reset_history()
             self._set_mask_source(source_kind, path.name)
@@ -257,13 +276,20 @@
         mask = apply_thresholds(mask, black, white)
         mask = apply_gamma(mask, gamma)
 
-        self.processed_mask = mask
+        # Never make pixels more opaque than they were in the source image. This
+        # preserves pre-existing PNG/WebP transparency even if the AI/manual mask
+        # paints those pixels white. For ordinary JPEG/RGB images source alpha is 255,
+        # so this is a no-op.
+        source_alpha = self.source_rgba.getchannel("A")
+        final_alpha = ImageChops.darker(mask, source_alpha)
+
+        self.processed_mask = final_alpha
         result = self.source_rgba.copy()
-        result.putalpha(mask)
+        result.putalpha(final_alpha)
         self.result_rgba = result
 
         self.mask_panel.set_image(
-            mask.convert("RGB"), checker=False, reset_view=False, fast=live_paint
+            final_alpha.convert("RGB"), checker=False, reset_view=False, fast=live_paint
         )
         self.result_panel.set_image(
             result, checker=True, reset_view=False, fast=live_paint
@@ -275,7 +301,10 @@
 
     def _show_original(self):
         if self.source_rgba:
-            self.original_panel.set_image(self.source_rgba, checker=False)
+            # Show a checkerboard for source images that already contain transparency.
+            # Fully opaque images keep the normal preview.
+            alpha_min, _alpha_max = self.source_rgba.getchannel("A").getextrema()
+            self.original_panel.set_image(self.source_rgba, checker=(alpha_min < 255))
 
     def current_output_dir(self) -> Path | None:
         if not self.source_path:
