@@ -15,7 +15,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from PIL import Image, ImageDraw, ImageFilter, ImageTk
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps, ImageTk
 
 
 APP_TITLE = "InSpyCutout v0.1.0"
@@ -50,6 +50,7 @@ STRINGS = {
         "need_mask": "先にマスクを生成または読み込んでください。",
         "image_load_failed": "画像の読み込みに失敗しました。\n{error}",
         "mask_load_failed": "マスクの読み込みに失敗しました。\n{error}",
+        "mask_size_mismatch": "マスクのサイズが元画像と一致しません。\n\n元画像: {expected_w}×{expected_h}\nマスク: {actual_w}×{actual_h}\n\n誤った位置に適用されるのを防ぐため、サイズを自動変更せず読み込みを中止しました。",
         "ai_failed": "InSPyReNetの実行に失敗しました。\n{error}{hint}",
         "channel_hint": "\n\n画像チャンネル数の不一致が発生しました。RGB入力版を利用してください。",
         "saved": "保存しました。\n\n{path}", "edit_mask_missing": "編集用マスクがありません。\n{path}",
@@ -92,6 +93,7 @@ STRINGS = {
         "need_image": "Select an image first.", "need_image_mask": "Prepare an image and mask first.",
         "need_mask": "Generate or load a mask first.",
         "image_load_failed": "Failed to load image.\n{error}", "mask_load_failed": "Failed to load mask.\n{error}",
+        "mask_size_mismatch": "The mask size does not match the source image.\n\nSource: {expected_w}×{expected_h}\nMask: {actual_w}×{actual_h}\n\nTo prevent a mask from being applied at the wrong positions, InSpyCutout will not resize it automatically.",
         "ai_failed": "InSPyReNet failed.\n{error}{hint}",
         "channel_hint": "\n\nImage channel mismatch detected. Use the RGB-input build.",
         "saved": "Saved.\n\n{path}", "edit_mask_missing": "Edited mask not found.\n{path}",
