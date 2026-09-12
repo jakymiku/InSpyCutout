@@ -22,39 +22,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build and syntax-check release source
+      - name: Syntax-check release source
         shell: pwsh
         run: |
-          if (Test-Path "src") {
-            $parts = Get-ChildItem "src/InSpyCutout.part*.py.txt" | Sort-Object Name
-            if (-not $parts) { throw "InSpyCutout source parts are missing." }
-            $source = ($parts | ForEach-Object { Get-Content -Raw -Encoding UTF8 $_.FullName }) -join ""
-          }
-          else {
-            $source = Get-Content -Raw -Encoding UTF8 "InSpyCutout.py"
-          }
-          [System.IO.File]::WriteAllText("InSpyCutout.release.py", $source, [System.Text.UTF8Encoding]::new($false))
           $env:PYTHONDONTWRITEBYTECODE = "1"
-          python -m py_compile InSpyCutout.release.py tools/preload_model.py
+          python -m py_compile InSpyCutout.py tools/preload_model.py
           Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Get-ChildItem -Recurse -File -Include *.pyc,*.pyo | Remove-Item -Force -ErrorAction SilentlyContinue
-
-      - name: Normalize repository source layout
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
-        run: |
-          if (Test-Path "src") {
-            Copy-Item "InSpyCutout.release.py" "InSpyCutout.py" -Force
-            git rm -r src
-            git add InSpyCutout.py
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git diff --cached --quiet
-            if ($LASTEXITCODE -ne 0) {
-              git commit -m "Normalize application source layout"
-              git push
-            }
-          }
 
       - name: Build ZIP
         shell: pwsh
@@ -64,12 +38,11 @@ jobs:
           $stage = Join-Path $env:RUNNER_TEMP "InSpyCutout-$version"
           New-Item -ItemType Directory -Force $stage | Out-Null
           $items = @(
-            'Launch_GUI.bat','Setup.bat','setup.ps1','config.ini',
+            'InSpyCutout.py','Launch_GUI.bat','Setup.bat','setup.ps1','config.ini',
             'requirements.txt','README.md','README_ja.md','LICENSE','THIRD_PARTY_NOTICES.md',
             'CHANGELOG.md','tools'
           )
           foreach ($item in $items) { Copy-Item $item $stage -Recurse -Force }
-          Copy-Item "InSpyCutout.release.py" (Join-Path $stage "InSpyCutout.py") -Force
           Get-ChildItem $stage -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Get-ChildItem $stage -Recurse -File -Include *.pyc,*.pyo | Remove-Item -Force -ErrorAction SilentlyContinue
           Compress-Archive -Path $stage -DestinationPath "dist/InSpyCutout-$version-Windows.zip" -Force
