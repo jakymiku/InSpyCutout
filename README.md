@@ -17,6 +17,7 @@ The intended workflow is simple:
 ## Highlights
 
 - Fully local processing after model setup
+- App-specific model/package caches are kept inside the InSpyCutout folder
 - InSpyReNet `base` model by default
 - Live transparency preview
 - White/black quick mask painting
@@ -38,6 +39,8 @@ The intended workflow is simple:
 4. Launch **InSpyCutout** from the shortcut or `Launch_GUI.bat`.
 
 Python 3.11 is used for the environment. If it is not installed and `winget` is available, setup will offer/install it automatically.
+
+The isolated environment is stored in `.venv/`. Persistent app-specific caches are redirected into `cache/` (including the InSPyReNet model, pip cache, and PyTorch-related caches) instead of using your other Python environments.
 
 On NVIDIA systems the setup script installs packages using the official PyTorch CUDA 12.8 wheel index. Other systems use the default/CPU package path.
 
@@ -87,6 +90,17 @@ paint_preview_ms=90
 ```
 
 `language=auto` uses Japanese on a Japanese OS and English elsewhere. The GUI language can also be changed with one click and the choice is saved.
+
+## Removing InSpyCutout
+
+Close InSpyCutout, back up anything you want to keep from `output/`, then delete the extracted **InSpyCutout folder**. The app itself, its `.venv`, downloaded model, app-specific caches, settings, and output files are stored under that folder.
+
+Two things can remain outside the folder:
+
+- **Python 3.11**: if Setup installed Python 3.11 for you, Windows keeps it installed because another application may also use it. If you do not use Python 3.11 elsewhere, uninstall it manually later from **Windows Settings > Apps > Installed apps**.
+- **Desktop shortcut**: deleting the app folder does not remove a desktop shortcut. Delete it manually if it remains. The default shortcut name is **`InSpyCutout`** (`InSpyCutout.lnk`). If you renamed it, delete the renamed shortcut instead.
+
+No separate uninstaller is required.
 
 ## Why this tool?
 
