@@ -1,6 +1,6 @@
 # InSpyCutout
 
-**アニメ・イラスト向けの、ローカル動作するAI半自動背景切り抜き＋簡易マスク編集ツールです。**
+**アニメ・イラスト・AI画像・写真に使える、ローカル動作のAI半自動背景切り抜き＋簡易マスク編集ツールです。**
 
 [English README](README.md)
 
@@ -20,6 +20,7 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 - 初回セットアップ後はローカル処理
 - モデルやパッケージのアプリ専用キャッシュもInSpyCutoutフォルダ内に保存
 - InSpyReNet `base` を標準使用
+- アニメ・イラスト系だけでなく、写真風AI画像や一般的な写真にも利用可能
 - リアルタイム透過プレビュー
 - 白黒ブラシによる簡易マスク修正
 - ブラシサイズ変更、Undo / Redo
@@ -45,7 +46,7 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 
 Python 3.11 を使用します。Python 3.11 が無い場合、`winget` が利用できるWindowsではセットアップから導入できます。
 
-専用Python環境は `.venv/`、InSpyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
+専用Python環境は `.venv/`、InSPyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
 
 NVIDIA GPUが見つかった場合はPyTorch公式のCUDA 12.8 wheel indexを使ってGPU版を導入し、それ以外は通常の依存関係を導入します。
 
