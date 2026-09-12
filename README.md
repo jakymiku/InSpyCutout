@@ -29,7 +29,7 @@ The intended workflow is simple:
 - Black / White Threshold controls from 0 to 255
 - Japanese / English UI toggle
 - Output organized as `output/<source filename>/...`
-- Microsoft Store Paint.NET launch support
+- Automatic Paint.NET detection (Microsoft Store / desktop) plus Windows “Open with…” fallback
 
 ## Windows quick start
 
@@ -43,6 +43,10 @@ Python 3.11 is used for the environment. If it is not installed and `winget` is 
 The isolated environment is stored in `.venv/`. Persistent app-specific caches are redirected into `cache/` (including the InSPyReNet model, pip cache, and PyTorch-related caches) instead of using your other Python environments.
 
 On NVIDIA systems the setup script installs packages using the official PyTorch CUDA 12.8 wheel index. Other systems use the default/CPU package path.
+
+For reproducibility on Windows, InSpyCutout pins `transparent-background 1.3.4`, `albumentations 1.4.16`, and `albucore 0.0.17`. This avoids newer Albucore/StringZilla builds that may fall back to local C/C++ compilation on some Windows systems.
+
+`Setup.bat` also writes a full `setup.log` next to the app files. If setup fails or the console output scrolls away, attach that file when reporting the problem.
 
 ## Controls
 
@@ -90,6 +94,18 @@ paint_preview_ms=90
 ```
 
 `language=auto` uses Japanese on a Japanese OS and English elsewhere. The GUI language can also be changed with one click and the choice is saved.
+
+### External mask editor
+
+The default is **`Auto Detect (Recommended)`**. When exporting a mask for editing, InSpyCutout tries the following in order:
+
+1. Paint.NET Desktop (registry, PATH, and common install locations)
+2. Paint.NET from the Microsoft Store
+3. If neither is found, Windows **“Open with…”** is shown
+
+The Microsoft Store build is launched through its Windows app ID instead of a hard-coded installation folder, so it works on other PCs where the same Store app is installed. The classic desktop build is detected separately.
+
+If you prefer Krita, GIMP, or another editor, use **Choose Custom EXE**. The old `Windows default` behavior was removed from the normal choices because PNG files are often associated with a viewer rather than an editor; “Open with…” is a more useful fallback.
 
 ## Removing InSpyCutout
 
