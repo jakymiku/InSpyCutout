@@ -32,3 +32,7 @@ Initial public preview.
 - GitHub Actions validates the Python source before packaging
 - Repository source layout is normalized to a single `InSpyCutout.py`
 - GitHub Actions release ZIP excludes Python bytecode/cache artifacts
+- Prevent double-click fit from firing on the mask pane while Paint mode is active
+- Add an optional persisted Mask / Transparency Preview view-sync toggle for linked zoom, pan, and fit
+- Keep the view-sync status text localized when switching Japanese / English
+- Document recommended Windows / CPU / NVIDIA GPU environments in both English and Japanese READMEs
