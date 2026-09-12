@@ -1,0 +1,220 @@
+        self._show_brush_cursor(event.x, event.y)
+
+    def _on_right_release(self, _event):
+        if self._drag_mode == "paint" and self.app:
+            self.app.end_paint_stroke()
+        self._drag_mode = None
+        self._paint_button = None
+        self._last_paint_point = None
+
+    def _paint_at_event(self, event, button: int):
+        if not self.app:
+            return
+        point = self.canvas_to_image(event.x, event.y)
+        if point is None:
+            self._last_paint_point = None
+            return
+        previous = self._last_paint_point
+        self.app.paint_mask(previous, point, button=button)
+        # Immediate canvas-only feedback: this is intentionally separate from the
+        # expensive alpha/composite refresh, so the brush follows the pointer smoothly.
+        self._draw_paint_overlay(previous, point, button)
+        self._last_paint_point = point
+
+    def _draw_paint_overlay(self, start, end, button: int):
+        if not self.app or self.base_image is None:
+            return
+        selected = self.app.brush_color.get()
+        color_name = selected if button == 1 else ("black" if selected == "white" else "white")
+        fill = "#ffffff" if color_name == "white" else "#000000"
+        outline = "#00e5ff" if color_name == "white" else "#ff4d6d"
+        size_img = max(1, min(200, int(self.app.brush_size_var.get())))
+        width = max(1, int(round(size_img * self._current_scale())))
+        exy = self.image_to_canvas(*end)
+        if exy is None:
+            return
+        ex, ey = exy
+        if start is None:
+            r = max(1, width / 2)
+            self.canvas.create_oval(
+                ex - r, ey - r, ex + r, ey + r,
+                fill=fill, outline=outline, width=1,
+                tags=("paint_overlay",),
+            )
+        else:
+            sxy = self.image_to_canvas(*start)
+            if sxy is None:
+                sxy = exy
+            sx, sy = sxy
+            self.canvas.create_line(
+                sx, sy, ex, ey,
+                fill=fill,
+                width=width,
+                capstyle=tk.ROUND,
+                joinstyle=tk.ROUND,
+                tags=("paint_overlay",),
+            )
+
+    def _on_double_click(self, _event=None):
+        if self._drag_mode == "paint":
+            return
+        self.reset_view()
+
+    def _zoom_at(self, x: float, y: float, zoom_factor: float):
+        if self.base_image is None:
+            return
+        old_scale = self._current_scale()
+        new_user_scale = max(0.05, min(30.0, self.user_scale * zoom_factor))
+        if abs(new_user_scale - self.user_scale) < 1e-9:
+            return
+
+        old_top_x, old_top_y = self._image_top_left(old_scale)
+        img_x = (x - old_top_x) / old_scale
+        img_y = (y - old_top_y) / old_scale
+
+        self.user_scale = new_user_scale
+        new_scale = self._current_scale()
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        iw, ih = self.base_image.size
+        centered_left = (cw - iw * new_scale) / 2
+        centered_top = (ch - ih * new_scale) / 2
+        self.pan_x = x - img_x * new_scale - centered_left
+        self.pan_y = y - img_y * new_scale - centered_top
+        self._draw()
+
+    def _on_mousewheel(self, event):
+        factor = 1.1 if event.delta > 0 else 1 / 1.1
+        self._zoom_at(event.x, event.y, factor)
+        self._show_brush_cursor(event.x, event.y)
+
+    def _on_linux_wheel(self, event):
+        factor = 1.1 if event.num == 4 else 1 / 1.1
+        self._zoom_at(event.x, event.y, factor)
+        self._show_brush_cursor(event.x, event.y)
+
+    def _on_pointer_motion(self, event):
+        self._show_brush_cursor(event.x, event.y)
+
+    def _on_pointer_leave(self, _event):
+        if self._brush_cursor_id is not None:
+            try:
+                self.canvas.delete(self._brush_cursor_id)
+            except Exception:
+                pass
+            self._brush_cursor_id = None
+
+    def _show_brush_cursor(self, x: int, y: int):
+        if not (self.editable and self.app):
+            return
+        if self.app.interaction_mode.get() != "paint" or self.app.space_down:
+            if self._brush_cursor_id is not None:
+                self.canvas.delete(self._brush_cursor_id)
+                self._brush_cursor_id = None
+            self._update_cursor_style()
+            return
+        self._update_cursor_style()
+        if self.base_image is None or self.canvas_to_image(x, y) is None:
+            if self._brush_cursor_id is not None:
+                self.canvas.delete(self._brush_cursor_id)
+                self._brush_cursor_id = None
+            return
+        radius = max(1.0, float(self.app.brush_size_var.get()) * self._current_scale() / 2.0)
+        color = "white" if self.app.brush_color.get() == "white" else "black"
+        outline = "#00e5ff" if color == "white" else "#ff4d6d"
+        if self._brush_cursor_id is not None:
+            self.canvas.delete(self._brush_cursor_id)
+        self._brush_cursor_id = self.canvas.create_oval(
+            x - radius,
+            y - radius,
+            x + radius,
+            y + radius,
+            outline=outline,
+            width=2,
+        )
+
+
+class App(tk.Tk):
+    def __init__(self, cfg_path: Path, initial_image: str | None = None):
+        super().__init__()
+        self.title(APP_TITLE)
+        self.geometry("1580x960")
+        self.minsize(1180, 720)
+
+        self.cfg_path = cfg_path
+        self.cfg = load_cfg(cfg_path)
+        self.base_dir = app_dir()
+        self.output_root = self.base_dir / "output"
+        self.output_root.mkdir(parents=True, exist_ok=True)
+
+        lang_cfg = cfg_get(self.cfg, "ui", "language", "auto").strip().lower()
+        if lang_cfg not in {"ja", "en"}:
+            system_lang = (locale.getlocale()[0] or "").lower()
+            lang_cfg = "ja" if system_lang.startswith("ja") else "en"
+        self.language = lang_cfg
+        self._i18n_widgets = []
+
+        self.source_path: Path | None = None
+        self.source_rgba: Image.Image | None = None
+        self.raw_mask: Image.Image | None = None
+        self.processed_mask: Image.Image | None = None
+        self.result_rgba: Image.Image | None = None
+        self.mask_source_label = tk.StringVar(value=f"{self.tr('mask')}: {self.tr('none')}")
+        self.status = tk.StringVar(value=self.tr("ready"))
+        self.remover = None
+        self.worker_queue: queue.Queue = queue.Queue()
+        self._preview_after = None
+        self._paint_preview_after = None
+        self._syncing_threshold = False
+        self.space_down = False
+        self.undo_stack: list[Image.Image] = []
+        self.redo_stack: list[Image.Image] = []
+        self._stroke_before: Image.Image | None = None
+        self._stroke_dirty = False
+        self._painting_active = False
+        self.paint_preview_ms = max(50, cfg_get(self.cfg, "ui", "paint_preview_ms", 90, int))
+        self.max_history = 20
+
+        self.gamma_var = tk.DoubleVar(value=cfg_get(self.cfg, "defaults", "alpha_gamma", 0.72, float))
+        self.offset_var = tk.IntVar(value=cfg_get(self.cfg, "defaults", "mask_offset", 0, int))
+        self.blur_var = tk.DoubleVar(value=cfg_get(self.cfg, "defaults", "mask_blur", 0.0, float))
+        self.black_var = tk.IntVar(value=cfg_get(self.cfg, "defaults", "black_threshold", 0, int))
+        self.white_var = tk.IntVar(value=cfg_get(self.cfg, "defaults", "white_threshold", 250, int))
+        self.interaction_mode = tk.StringVar(value=cfg_get(self.cfg, "paint", "mode", "move"))
+        self.brush_color = tk.StringVar(value=cfg_get(self.cfg, "paint", "brush_color", "white"))
+        self.brush_size_var = tk.IntVar(value=cfg_get(self.cfg, "paint", "brush_size", 32, int))
+        self.editor_mode = tk.StringVar(value=cfg_get(self.cfg, "editor", "mode", "paintnet_store"))
+        self.paintnet_aumid = cfg_get(
+            self.cfg,
+            "editor",
+            "paintnet_aumid",
+            "dotPDNLLC.paint.net_h55e3w7q8jbva!dotPDNLLC.paint.net",
+        )
+
+        self._build_ui()
+        self._setup_var_traces()
+        self._setup_shortcuts()
+        self.after(100, self._poll_worker)
+
+        if initial_image:
+            p = Path(initial_image)
+            if p.exists():
+                self.after(200, lambda: self.load_source(p, auto_generate=True))
+
+    def tr(self, key: str, **kwargs):
+        text = STRINGS.get(self.language, STRINGS["en"]).get(key, key)
+        return text.format(**kwargs) if kwargs else text
+
+    def _iw(self, widget, key: str):
+        self._i18n_widgets.append((widget, key))
+        try:
+            widget.configure(text=self.tr(key))
+        except Exception:
+            pass
+        return widget
+
+    def toggle_language(self):
+        self.language = "en" if self.language == "ja" else "ja"
+        if not self.cfg.has_section("ui"):
+            self.cfg.add_section("ui")
+        self.cfg["ui"]["language"] = self.language
