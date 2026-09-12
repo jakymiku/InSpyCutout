@@ -141,10 +141,23 @@ Write-Host "Launch with Launch_GUI.bat or the desktop shortcut."
 
 try { Stop-Transcript | Out-Null } catch {}
 
+# Launch_GUI.bat may invoke setup automatically. In that case it owns the final
+# launch so we do not create a duplicate application window here.
+if ($env:INSPYCUTOUT_SETUP_NO_LAUNCH -eq "1") {
+    exit 0
+}
+
 $answer = Read-Host "Launch InSpyCutout now? [Y/n]"
 if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^[Yy]') {
     $pythonw = Join-Path $PSScriptRoot ".venv\Scripts\pythonw.exe"
     $app = Join-Path $PSScriptRoot "InSpyCutout.py"
     $config = Join-Path $PSScriptRoot "config.ini"
-    Start-Process -FilePath $pythonw -ArgumentList @($app, "--config", $config) -WorkingDirectory $PSScriptRoot
+    # Start-Process joins ArgumentList entries into one command line, so quote file
+    # paths explicitly to support app folders/user profiles containing spaces.
+    $launchArgs = @(
+        ('"{0}"' -f $app),
+        "--config",
+        ('"{0}"' -f $config)
+    )
+    Start-Process -FilePath $pythonw -ArgumentList $launchArgs -WorkingDirectory $PSScriptRoot
 }
