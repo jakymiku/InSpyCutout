@@ -1,0 +1,220 @@
+        if self.app:
+            self.hint.configure(text=self.app.tr("hint_paint" if self.editable else "hint_view"))
+
+    def set_image(
+        self,
+        image: Image.Image | None,
+        checker: bool = False,
+        reset_view: bool = True,
+        fast: bool = False,
+    ):
+        if image is None:
+            self.base_image = None
+            self.photo = None
+            self.checker = False
+            self.canvas.delete("all")
+            return
+
+        was_none = self.base_image is None
+        # Keep RGBA only when a checkerboard composite is required. The checkerboard
+        # itself is generated only for the visible viewport in _draw().
+        self.base_image = image.copy().convert("RGBA" if checker else "RGB")
+        self.checker = bool(checker)
+        self.fast_render = bool(fast)
+        if reset_view or was_none:
+            self.reset_view(redraw=False)
+        self._draw()
+
+    def reset_view(self, redraw: bool = True):
+        self.user_scale = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+        if redraw:
+            self._draw()
+
+    def _fit_scale(self) -> float:
+        if self.base_image is None:
+            return 1.0
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        iw, ih = self.base_image.size
+        return max(0.01, min(cw / max(1, iw), ch / max(1, ih)))
+
+    def _current_scale(self) -> float:
+        return max(0.01, min(30.0, self._fit_scale() * self.user_scale))
+
+    def _image_top_left(self, scale: float) -> tuple[float, float]:
+        assert self.base_image is not None
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        iw, ih = self.base_image.size
+        draw_w = iw * scale
+        draw_h = ih * scale
+        x = (cw - draw_w) / 2 + self.pan_x
+        y = (ch - draw_h) / 2 + self.pan_y
+        return x, y
+
+    def canvas_to_image(self, x: float, y: float) -> tuple[float, float] | None:
+        if self.base_image is None:
+            return None
+        scale = self._current_scale()
+        left, top = self._image_top_left(scale)
+        ix = (x - left) / scale
+        iy = (y - top) / scale
+        iw, ih = self.base_image.size
+        if ix < 0 or iy < 0 or ix >= iw or iy >= ih:
+            return None
+        return ix, iy
+
+    def image_to_canvas(self, x: float, y: float) -> tuple[float, float] | None:
+        if self.base_image is None:
+            return None
+        scale = self._current_scale()
+        left, top = self._image_top_left(scale)
+        return left + x * scale, top + y * scale
+
+    def _draw(self):
+        self.canvas.delete("all")
+        self._brush_cursor_id = None
+        if self.base_image is None:
+            return
+
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        scale = self._current_scale()
+        iw, ih = self.base_image.size
+        left, top = self._image_top_left(scale)
+        right = left + iw * scale
+        bottom = top + ih * scale
+
+        # Only render the part of the image that is actually visible in the canvas.
+        # v1.4 resized the ENTIRE image at every mouse event; at high zoom this could
+        # create huge temporary images and was the main cause of paint stutter.
+        vis_l = max(0.0, left)
+        vis_t = max(0.0, top)
+        vis_r = min(float(cw), right)
+        vis_b = min(float(ch), bottom)
+        if vis_r <= vis_l or vis_b <= vis_t:
+            return
+
+        import math
+        ix0 = max(0, int(math.floor((vis_l - left) / scale)))
+        iy0 = max(0, int(math.floor((vis_t - top) / scale)))
+        ix1 = min(iw, int(math.ceil((vis_r - left) / scale)))
+        iy1 = min(ih, int(math.ceil((vis_b - top) / scale)))
+        if ix1 <= ix0 or iy1 <= iy0:
+            return
+
+        crop = self.base_image.crop((ix0, iy0, ix1, iy1))
+        draw_w = max(1, int(round((ix1 - ix0) * scale)))
+        draw_h = max(1, int(round((iy1 - iy0) * scale)))
+
+        if self.fast_render:
+            resample = Image.Resampling.NEAREST if self.editable else Image.Resampling.BILINEAR
+        else:
+            resample = Image.Resampling.LANCZOS
+        rendered = crop.resize((draw_w, draw_h), resample)
+
+        if self.checker and rendered.mode == "RGBA":
+            cell = max(6, min(24, int(round(16 * max(0.5, min(2.0, self.user_scale))))))
+            bg = make_checkerboard(rendered.size, cell=cell)
+            bg.paste(rendered, (0, 0), rendered)
+            rendered = bg
+        else:
+            rendered = rendered.convert("RGB")
+
+        self.photo = ImageTk.PhotoImage(rendered)
+        dest_x = left + ix0 * scale
+        dest_y = top + iy0 * scale
+        self.canvas.create_image(dest_x, dest_y, image=self.photo, anchor="nw")
+        self._update_cursor_style()
+
+    def _update_cursor_style(self):
+        if not self.app:
+            return
+        if self.app.space_down:
+            self.canvas.config(cursor="fleur")
+        elif self.editable and self.app.interaction_mode.get() == "paint":
+            self.canvas.config(cursor="crosshair")
+        else:
+            self.canvas.config(cursor="fleur")
+
+    def _on_resize(self, _event=None):
+        size = (self.canvas.winfo_width(), self.canvas.winfo_height())
+        if size != self._last_size:
+            self._last_size = size
+            self._draw()
+
+    def _start_pan(self, event):
+        self._drag_mode = "pan"
+        self._drag_start = (event.x, event.y)
+        self._drag_pan_start = (self.pan_x, self.pan_y)
+
+    def _pan_move(self, event):
+        if self._drag_start is None or self._drag_pan_start is None:
+            return
+        dx = event.x - self._drag_start[0]
+        dy = event.y - self._drag_start[1]
+        self.pan_x = self._drag_pan_start[0] + dx
+        self.pan_y = self._drag_pan_start[1] + dy
+        self._draw()
+
+    def _left_should_pan(self) -> bool:
+        if not self.app:
+            return True
+        if self.app.space_down:
+            return True
+        if not self.editable:
+            return True
+        return self.app.interaction_mode.get() == "move"
+
+    def _on_left_press(self, event):
+        self.canvas.focus_set()
+        if self._left_should_pan():
+            self._start_pan(event)
+            return
+        if self.editable and self.app and self.app.interaction_mode.get() == "paint":
+            self._drag_mode = "paint"
+            self._paint_button = 1
+            self._last_paint_point = None
+            self.canvas.delete("paint_overlay")
+            self.app.begin_paint_stroke()
+            self._paint_at_event(event, button=1)
+
+    def _on_left_motion(self, event):
+        if self._drag_mode == "pan":
+            self._pan_move(event)
+        elif self._drag_mode == "paint":
+            self._paint_at_event(event, button=1)
+        self._show_brush_cursor(event.x, event.y)
+
+    def _on_left_release(self, _event):
+        if self._drag_mode == "paint" and self.app:
+            self.app.end_paint_stroke()
+        self._drag_mode = None
+        self._paint_button = None
+        self._last_paint_point = None
+
+    def _on_middle_press(self, event):
+        self.canvas.focus_set()
+        self._start_pan(event)
+
+    def _on_middle_motion(self, event):
+        self._pan_move(event)
+
+    def _on_middle_release(self, _event):
+        self._drag_mode = None
+
+    def _on_right_press(self, event):
+        self.canvas.focus_set()
+        if self.editable and self.app and self.app.interaction_mode.get() == "paint" and not self.app.space_down:
+            self._drag_mode = "paint"
+            self._paint_button = 3
+            self._last_paint_point = None
+            self.canvas.delete("paint_overlay")
+            self.app.begin_paint_stroke()
+            self._paint_at_event(event, button=3)
+
+    def _on_right_motion(self, event):
+        if self._drag_mode == "paint":
+            self._paint_at_event(event, button=3)
