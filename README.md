@@ -1,73 +1,63 @@
 # InSpyCutout
 
-**A lightweight, local, AI-assisted background remover and mask editor for anime, illustrations, AI images, and photos.**
+**A lightweight, local background-removal and mask-editing tool powered by InSPyReNet.**
 
 [日本語 README](README_ja.md)
 
-InSpyCutout uses **InSPyReNet** through `transparent-background` to generate a soft foreground mask, then lets you quickly fix the small mistakes that fully automatic removal often leaves behind.
+InSpyCutout is designed for a simple workflow: generate a foreground mask automatically, make small corrections, and save a transparent PNG. It works with anime/illustrations, AI-generated images, and many photo-style images.
 
-The intended workflow is simple:
+## Features
 
-1. Open an image.
-2. InSpyReNet creates a mask automatically.
-3. Fine-tune alpha gamma, thresholds, blur, or mask offset while watching the transparency preview.
-4. Paint white to keep pixels or black to remove them for quick corrections.
-5. Save the cutout. For larger edits, export the mask to Paint.NET or another editor and reload it.
-
-## Highlights
-
-- Fully local processing after model setup
-- App-specific model/package caches are kept inside the InSpyCutout folder
-- InSpyReNet `base` model by default
-- Works well with anime/illustration images and can also handle photo-style images
+- Local image processing after the initial setup
+- InSPyReNet `base` model for automatic foreground masks
 - Live transparency preview
-- White/black quick mask painting
-- Adjustable brush size, Undo / Redo
-- Mouse-wheel zoom
-- Left-drag pan in Move mode
-- Hold **Space** + left-drag to temporarily pan while painting
-- Middle-mouse drag to pan at any time
-- Black / White Threshold controls from 0 to 255
-- Japanese / English UI toggle
-- Output organized as `output/<source filename>/...`
-- Automatic Paint.NET detection (Microsoft Store / desktop) plus Windows “Open with…” fallback
-- EXIF orientation is applied automatically for camera/smartphone images
-- Existing source transparency is preserved and cannot be accidentally made opaque by the generated mask
-- External/edited masks with the wrong dimensions are rejected instead of silently resized
-- Optional linked zoom/pan/fit between the Mask and Transparency Preview panes
-- Double-click fit is suppressed on the mask pane while Paint mode is active, so double-click painting does not unexpectedly reset the view
+- Alpha Gamma, Mask Offset, Mask Blur, Black Threshold, and White Threshold controls
+- White/black brush editing directly on the mask
+- Adjustable brush size with Undo / Redo
+- Mouse-wheel zoom and multiple pan controls
+- Optional synchronized zoom / pan / fit between the Mask and Transparency Preview panes
+- Japanese / English UI switch
+- Automatic Paint.NET detection (Microsoft Store and desktop versions)
+- Custom external mask editor support
+- EXIF orientation handling for camera/smartphone images
+- Existing source transparency is preserved
+- Edited masks with mismatched dimensions are rejected instead of resized automatically
+- Per-image output folders
 
 ## Recommended environment
 
 | Item | Recommendation / notes |
 |---|---|
 | OS | 64-bit Windows 10 or Windows 11 |
-| Python | Python 3.11. Setup can install it automatically with `winget` when available. |
-| GPU | **NVIDIA CUDA-capable GPU recommended.** This provides by far the best mask-generation speed. |
-| CPU-only use | Supported. Systems without a supported NVIDIA GPU can run InSpyCutout on the CPU, but AI mask generation can be substantially slower. |
-| AMD / Intel GPU | The current Windows setup does not configure AMD or Intel GPU acceleration, so these systems currently use CPU inference. |
-| Memory | 16 GB RAM or more is recommended for comfortable use. |
-| Disk space | Several GB of free space is required for PyTorch, the Python environment, the InSPyReNet model, and local caches. Extra free space is recommended during setup. |
-| Internet | Required for the initial setup and model/package downloads. After setup, normal image processing is local. |
+| Python | Python 3.11. Setup can install it with `winget` when available. |
+| GPU | **NVIDIA CUDA-capable GPU recommended** for fast mask generation. |
+| CPU-only | Supported, but AI mask generation can be much slower. |
+| AMD / Intel GPU | The current Windows setup does not configure GPU acceleration for these devices, so inference uses the CPU. |
+| Memory | 16 GB RAM or more recommended |
+| Disk space | Several GB of free space for Python, PyTorch, the model, and local caches |
+| Internet | Required for the initial setup and downloads; normal image processing is local afterward |
 
-On NVIDIA systems, Setup installs the official PyTorch **CUDA 12.8** build. A reasonably current NVIDIA driver is therefore recommended. There is currently no hard VRAM minimum documented because it has not been broadly tested across GPU models; if GPU execution is unavailable, InSpyCutout falls back to CPU operation rather than requiring CUDA.
+On NVIDIA systems, Setup installs the official PyTorch CUDA 12.8 build. A reasonably current NVIDIA driver is recommended. No strict minimum VRAM requirement is currently specified.
 
-## Windows quick start
+## Installation
 
 1. Download and extract the release ZIP.
 2. Double-click **`Setup.bat`**.
-3. Setup creates an isolated `.venv`, installs dependencies, downloads/preloads the model, and creates a desktop shortcut.
-4. Launch **InSpyCutout** from the shortcut or `Launch_GUI.bat`.
+3. Wait for the dedicated Python environment, dependencies, and model to be prepared.
+4. Launch InSpyCutout from the desktop shortcut or **`Launch_GUI.bat`**.
 
-Python 3.11 is used for the environment. If it is not installed and `winget` is available, setup will offer/install it automatically.
+InSpyCutout keeps its Python environment in `.venv/` and application-specific caches in `cache/`. It does not install packages into ComfyUI or other Python environments.
 
-The isolated environment is stored in `.venv/`. Persistent app-specific caches are redirected into `cache/` (including the InSPyReNet model, pip cache, and PyTorch-related caches) instead of using your other Python environments.
+If Setup fails, check `setup.log` in the InSpyCutout folder for the full installation log.
 
-On NVIDIA systems the setup script installs packages using the official PyTorch CUDA 12.8 wheel index. Other systems use the default/CPU package path.
+## Basic workflow
 
-For reproducibility on Windows, InSpyCutout pins `transparent-background 1.3.4`, `albumentations 1.4.16`, and `albucore 0.0.17`. This avoids newer Albucore/StringZilla builds that may fall back to local C/C++ compilation on some Windows systems.
-
-`Setup.bat` also writes a full `setup.log` next to the app files. If setup fails or the console output scrolls away, attach that file when reporting the problem.
+1. Open a source image.
+2. Generate an AI mask.
+3. Adjust Alpha Gamma, thresholds, blur, or mask offset while watching the transparency preview.
+4. Use the white brush to keep areas or the black brush to remove areas.
+5. Save the transparent result.
+6. For larger corrections, export the mask to an external editor and reload it afterward.
 
 ## Controls
 
@@ -81,19 +71,35 @@ For reproducibility on Windows, InSpyCutout pins `transparent-background 1.3.4`,
 | Redo | `Ctrl+Y` / `Ctrl+Shift+Z` |
 | Zoom | Mouse wheel |
 | Pan | Move mode + left drag |
-| Temporary pan | Hold `Space` + left drag |
-| Pan anytime | Middle mouse drag |
-| Fit image | Double-click |
+| Temporary pan while painting | Hold `Space` + left drag |
+| Pan anytime | Middle-mouse drag |
+| Fit image | Double-click in Move mode |
+
+When Paint mode is active, double-clicking the editable mask does not trigger Fit. This prevents accidental view resets while painting.
 
 ## Mask meaning
 
 - **White** = keep / opaque
 - **Black** = remove / transparent
-- **Gray** = partial transparency
+- **Gray** = partially transparent
+
+## View synchronization
+
+The **Sync Mask / Transparency Preview view** option keeps the Mask and Transparency Preview panes on the same image region while zooming, panning, or fitting. It can be turned on or off at any time, and the selected state is saved.
+
+## External mask editor
+
+The default editor mode is **Auto Detect (Recommended)**. InSpyCutout checks for:
+
+1. Paint.NET Desktop
+2. Paint.NET from the Microsoft Store
+3. Windows **Open with...** if Paint.NET is not found
+
+You can also select a custom executable such as Krita, GIMP, or another image editor.
 
 ## Output
 
-For `sample.png`, InSpyCutout creates:
+For `sample.png`, files are saved under:
 
 ```text
 output/
@@ -101,57 +107,30 @@ output/
     sample_cutout.png
     sample_mask.png
     sample_raw_mask.png
-    sample_edit_mask.png   # only when exported for external editing
+    sample_edit_mask.png   # created when exported for external editing
 ```
 
 ## Configuration
 
-`config.ini` stores defaults for the model, sliders, paint tool, editor integration, and UI language.
+Settings are stored in `config.ini`, including UI language, mask defaults, brush settings, editor selection, and view synchronization.
 
-```ini
-[ui]
-language=auto
-paint_preview_ms=90
-sync_mask_preview=1
-```
-
-`language=auto` uses Japanese on a Japanese OS and English elsewhere. The GUI language can also be changed with one click and the choice is saved.
-
-`sync_mask_preview=1` keeps the Mask and Transparency Preview panes on the same image region while zooming, panning, or fitting the image. The GUI checkbox can turn this on or off at any time, and the choice is saved.
-
-### External mask editor
-
-The default is **`Auto Detect (Recommended)`**. When exporting a mask for editing, InSpyCutout tries the following in order:
-
-1. Paint.NET Desktop (registry, PATH, and common install locations)
-2. Paint.NET from the Microsoft Store
-3. If neither is found, Windows **“Open with…”** is shown
-
-The Microsoft Store build is launched through its Windows app ID instead of a hard-coded installation folder, so it works on other PCs where the same Store app is installed. The classic desktop build is detected separately.
-
-If you prefer Krita, GIMP, or another editor, use **Choose Custom EXE**. The old `Windows default` behavior was removed from the normal choices because PNG files are often associated with a viewer rather than an editor; “Open with…” is a more useful fallback.
+The most common settings can be changed directly from the GUI.
 
 ## Removing InSpyCutout
 
-Close InSpyCutout, back up anything you want to keep from `output/`, then delete the extracted **InSpyCutout folder**. The app itself, its `.venv`, downloaded model, app-specific caches, settings, and output files are stored under that folder.
+Close the application, back up anything you want to keep from `output/`, then delete the extracted InSpyCutout folder. The application, `.venv`, downloaded model, local caches, settings, and output files are stored there.
 
-Two things can remain outside the folder:
+Two items may remain outside that folder:
 
-- **Python 3.11**: if Setup installed Python 3.11 for you, Windows keeps it installed because another application may also use it. If you do not use Python 3.11 elsewhere, uninstall it manually later from **Windows Settings > Apps > Installed apps**.
-- **Desktop shortcut**: deleting the app folder does not remove a desktop shortcut. Delete it manually if it remains. The default shortcut name is **`InSpyCutout`** (`InSpyCutout.lnk`). If you renamed it, delete the renamed shortcut instead.
-
-No separate uninstaller is required.
-
-## Why this tool?
-
-Automatic background removal is often already 90–99% correct. The frustrating part is fixing a few missed strands, holes, or background remnants. InSpyCutout focuses on that last small correction step instead of trying to become a full image editor.
+- **Python 3.11** if Setup installed it. Remove it manually from Windows Settings only if you do not use it elsewhere.
+- **Desktop shortcut**. Delete it manually if it remains after removing the application folder.
 
 ## Credits
 
-Background removal is powered by [transparent-background](https://github.com/plemeri/transparent-background) and [InSPyReNet](https://github.com/plemeri/InSPyReNet) by their respective authors.
+Background removal is powered by [transparent-background](https://github.com/plemeri/transparent-background) and [InSPyReNet](https://github.com/plemeri/InSPyReNet).
 
-If you use InSPyReNet in academic work, please cite the original ACCV 2022 paper described in the upstream project.
+If you use InSPyReNet in academic work, please refer to the citation information in the upstream project.
 
 ## License
 
-InSpyCutout is released under the [MIT License](LICENSE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependencies and upstream licenses.
+InSpyCutout is released under the [MIT License](LICENSE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party dependencies and licenses.
