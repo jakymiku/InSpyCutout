@@ -25,3 +25,7 @@ Initial public preview.
 - Preserve pre-existing source transparency by clamping the final alpha to the source alpha
 - Reject mismatched external/edited mask dimensions instead of silently resizing them
 - Show checkerboard on the original preview when the source image already contains transparency
+- Confirmed Japanese and symbol-heavy Windows paths work in real-world testing
+- Expanded the documented target from anime/illustration images to include photo-style AI images and photos
+- GitHub Actions now validates the assembled Python source before packaging
+- GitHub Actions release ZIP contains a normal single `InSpyCutout.py` and excludes the internal source chunks
