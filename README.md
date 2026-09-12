@@ -1,6 +1,6 @@
 # InSpyCutout
 
-**A lightweight, local, AI-assisted background remover and mask editor for anime / illustration workflows.**
+**A lightweight, local, AI-assisted background remover and mask editor for anime, illustrations, AI images, and photos.**
 
 [日本語 README](README_ja.md)
 
@@ -19,6 +19,7 @@ The intended workflow is simple:
 - Fully local processing after model setup
 - App-specific model/package caches are kept inside the InSpyCutout folder
 - InSpyReNet `base` model by default
+- Works well with anime/illustration images and can also handle photo-style images
 - Live transparency preview
 - White/black quick mask painting
 - Adjustable brush size, Undo / Redo
@@ -123,7 +124,7 @@ No separate uninstaller is required.
 
 ## Why this tool?
 
-Automatic background removal is often already 90–99% correct, especially on anime-style images. The frustrating part is fixing a few missed strands, holes, or background remnants. InSpyCutout focuses on that last small correction step instead of trying to become a full image editor.
+Automatic background removal is often already 90–99% correct. The frustrating part is fixing a few missed strands, holes, or background remnants. InSpyCutout focuses on that last small correction step instead of trying to become a full image editor.
 
 ## Credits
 
