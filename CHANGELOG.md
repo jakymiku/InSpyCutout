@@ -15,3 +15,4 @@ Initial public preview.
 - Per-image output folders
 - Japanese / English UI switch with persisted language setting
 - Windows setup script with isolated `.venv`, dependency installation, model preload, and desktop shortcut
+- App-specific model/package caches redirected into the InSpyCutout folder for clean removal
