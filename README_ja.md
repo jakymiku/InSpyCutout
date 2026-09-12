@@ -4,6 +4,8 @@
 
 [English README](README.md)
 
+![InSpyCutout スクリーンショット](assets/InSpyCutout_preview.webp)
+
 InSpyCutout は、AIで前景マスクを作成し、必要な部分だけ手早く修正して透過PNGとして保存することを目的にしています。アニメ・イラスト、AI生成画像、写真風画像などに利用できます。
 
 ## 主な機能
