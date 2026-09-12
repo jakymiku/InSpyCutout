@@ -35,6 +35,21 @@ The intended workflow is simple:
 - Existing source transparency is preserved and cannot be accidentally made opaque by the generated mask
 - External/edited masks with the wrong dimensions are rejected instead of silently resized
 
+## Recommended environment
+
+| Item | Recommendation / notes |
+|---|---|
+| OS | 64-bit Windows 10 or Windows 11 |
+| Python | Python 3.11. Setup can install it automatically with `winget` when available. |
+| GPU | **NVIDIA CUDA-capable GPU recommended.** This provides by far the best mask-generation speed. |
+| CPU-only use | Supported. Systems without a supported NVIDIA GPU can run InSpyCutout on the CPU, but AI mask generation can be substantially slower. |
+| AMD / Intel GPU | The current Windows setup does not configure AMD or Intel GPU acceleration, so these systems currently use CPU inference. |
+| Memory | 16 GB RAM or more is recommended for comfortable use. |
+| Disk space | Several GB of free space is required for PyTorch, the Python environment, the InSPyReNet model, and local caches. Extra free space is recommended during setup. |
+| Internet | Required for the initial setup and model/package downloads. After setup, normal image processing is local. |
+
+On NVIDIA systems, Setup installs the official PyTorch **CUDA 12.8** build. A reasonably current NVIDIA driver is therefore recommended. There is currently no hard VRAM minimum documented because it has not been broadly tested across GPU models; if GPU execution is unavailable, InSpyCutout falls back to CPU operation rather than requiring CUDA.
+
 ## Windows quick start
 
 1. Download and extract the release ZIP.
