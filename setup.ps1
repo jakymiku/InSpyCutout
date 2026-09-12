@@ -1,6 +1,20 @@
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath $PSScriptRoot
 
+# Keep persistent caches inside the application folder so removing the folder
+# removes the virtual environment, model files, and caches together.
+$cacheRoot = Join-Path $PSScriptRoot "cache"
+$env:PIP_CACHE_DIR = Join-Path $cacheRoot "pip"
+$env:TRANSPARENT_BACKGROUND_FILE_PATH = Join-Path $cacheRoot "models"
+$env:TORCH_HOME = Join-Path $cacheRoot "torch"
+$env:TORCH_EXTENSIONS_DIR = Join-Path $cacheRoot "torch_extensions"
+$env:HF_HOME = Join-Path $cacheRoot "huggingface"
+$env:XDG_CACHE_HOME = Join-Path $cacheRoot "xdg"
+
+@($cacheRoot, $env:PIP_CACHE_DIR, $env:TRANSPARENT_BACKGROUND_FILE_PATH, $env:TORCH_HOME, $env:TORCH_EXTENSIONS_DIR, $env:HF_HOME, $env:XDG_CACHE_HOME) | ForEach-Object {
+    New-Item -ItemType Directory -Force -Path $_ | Out-Null
+}
+
 function Write-Step {
     param([Parameter(Mandatory = $true)][string]$Text)
     Write-Host ""
