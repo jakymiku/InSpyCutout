@@ -29,7 +29,10 @@ jobs:
           if (-not $parts) { throw "InSpyCutout source parts are missing." }
           $source = ($parts | ForEach-Object { Get-Content -Raw -Encoding UTF8 $_.FullName }) -join ""
           [System.IO.File]::WriteAllText("InSpyCutout.release.py", $source, [System.Text.UTF8Encoding]::new($false))
+          $env:PYTHONDONTWRITEBYTECODE = "1"
           python -m py_compile InSpyCutout.release.py tools/preload_model.py
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Recurse -File -Include *.pyc,*.pyo | Remove-Item -Force -ErrorAction SilentlyContinue
 
       - name: Build ZIP
         shell: pwsh
@@ -45,6 +48,8 @@ jobs:
           )
           foreach ($item in $items) { Copy-Item $item $stage -Recurse -Force }
           Copy-Item "InSpyCutout.release.py" (Join-Path $stage "InSpyCutout.py") -Force
+          Get-ChildItem $stage -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem $stage -Recurse -File -Include *.pyc,*.pyo | Remove-Item -Force -ErrorAction SilentlyContinue
           Compress-Archive -Path $stage -DestinationPath "dist/InSpyCutout-$version-Windows.zip" -Force
 
       - name: Upload workflow artifact
