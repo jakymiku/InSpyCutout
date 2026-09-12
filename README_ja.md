@@ -30,7 +30,7 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 - Black / White Threshold は 0～255
 - 日本語 / English をワンクリック切替
 - `output/元ファイル名/` 単位で自動整理
-- Microsoft Store版 Paint.NET の起動に対応
+- Paint.NET（Microsoft Store版 / デスクトップ版）の自動検出と、Windows「プログラムから開く…」に対応
 
 ## Windowsでの導入
 
@@ -45,6 +45,10 @@ Python 3.11 を使用します。Python 3.11 が無い場合、`winget` が利�
 専用Python環境は `.venv/`、InSPyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
 
 NVIDIA GPUが見つかった場合はPyTorch公式のCUDA 12.8 wheel indexを使ってGPU版を導入し、それ以外は通常の依存関係を導入します。
+
+Windowsでの再現性を優先し、`transparent-background 1.3.4`、`albumentations 1.4.16`、`albucore 0.0.17` を固定しています。これにより、新しいAlbucore/StringZilla系依存関係が環境によってC/C++のローカルビルドへフォールバックする問題を避けます。
+
+`Setup.bat` 実行時にはアプリフォルダ直下へ **`setup.log`** も保存します。セットアップが失敗した場合や、コンソールの表示が流れて消えてしまった場合は、このファイルをそのまま添付してください。
 
 ## 操作
 
@@ -92,6 +96,18 @@ paint_preview_ms=90
 ```
 
 `language=auto` の場合、日本語環境では日本語、それ以外では英語で起動します。GUI右上のボタンからワンクリックで切り替えでき、その選択は保存されます。
+
+### 外部マスクエディター
+
+標準は **`自動検出 (推奨)`** です。マスクを書き出して編集するとき、InSpyCutout は次の順でエディターを探します。
+
+1. デスクトップ版 Paint.NET（レジストリ、PATH、標準的なインストール先を確認）
+2. Microsoft Store版 Paint.NET
+3. 見つからなければ Windows の **「プログラムから開く…」** を表示
+
+Store版 Paint.NET は固定インストールパスを直接参照せず、WindowsのアプリID経由で起動するため、同じMicrosoft Store版をインストールしている他のPCでも利用できます。デスクトップ版Paint.NETも自動検出します。
+
+Paint.NET以外を常用する場合は **「カスタムEXEを選択」** から Krita / GIMP / その他の画像編集ソフトの実行ファイルを指定できます。旧 `Windows default` 相当の「PNGの既定アプリをそのまま開く」動作は、画像ビューアーが起動することが多いため標準候補から外し、代わりに「プログラムから開く…」を使用します。
 
 ## 削除・アンインストール
 
