@@ -1,3 +1,40 @@
+        hint_text = app.tr("hint_paint" if editable else "hint_view") if app else ""
+        self.hint = ttk.Label(self, text=hint_text, anchor="center")
+        self.hint.pack(fill="x", pady=(4, 0))
+
+        self.base_image: Image.Image | None = None
+        self.photo = None
+        self.checker = False
+        self.fast_render = False
+        self.user_scale = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+        self._drag_start: tuple[int, int] | None = None
+        self._drag_pan_start: tuple[float, float] | None = None
+        self._last_size = (1, 1)
+        self._drag_mode: str | None = None
+        self._paint_button: int | None = None
+        self._last_paint_point: tuple[float, float] | None = None
+        self._brush_cursor_id = None
+
+        self.canvas.bind("<Configure>", self._on_resize)
+        self.canvas.bind("<ButtonPress-1>", self._on_left_press)
+        self.canvas.bind("<B1-Motion>", self._on_left_motion)
+        self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
+        self.canvas.bind("<ButtonPress-2>", self._on_middle_press)
+        self.canvas.bind("<B2-Motion>", self._on_middle_motion)
+        self.canvas.bind("<ButtonRelease-2>", self._on_middle_release)
+        self.canvas.bind("<ButtonPress-3>", self._on_right_press)
+        self.canvas.bind("<B3-Motion>", self._on_right_motion)
+        self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
+        self.canvas.bind("<Double-Button-1>", self._on_double_click)
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind("<Button-4>", self._on_linux_wheel)
+        self.canvas.bind("<Button-5>", self._on_linux_wheel)
+        self.canvas.bind("<Motion>", self._on_pointer_motion)
+        self.canvas.bind("<Leave>", self._on_pointer_leave)
+
+    def update_language(self):
         if self.app:
             self.hint.configure(text=self.app.tr("hint_paint" if self.editable else "hint_view"))
 
@@ -218,3 +255,33 @@
     def _on_right_motion(self, event):
         if self._drag_mode == "paint":
             self._paint_at_event(event, button=3)
+        self._show_brush_cursor(event.x, event.y)
+
+    def _on_right_release(self, _event):
+        if self._drag_mode == "paint" and self.app:
+            self.app.end_paint_stroke()
+        self._drag_mode = None
+        self._paint_button = None
+        self._last_paint_point = None
+
+    def _paint_at_event(self, event, button: int):
+        if not self.app:
+            return
+        point = self.canvas_to_image(event.x, event.y)
+        if point is None:
+            self._last_paint_point = None
+            return
+        previous = self._last_paint_point
+        self.app.paint_mask(previous, point, button=button)
+        # Immediate canvas-only feedback: this is intentionally separate from the
+        # expensive alpha/composite refresh, so the brush follows the pointer smoothly.
+        self._draw_paint_overlay(previous, point, button)
+        self._last_paint_point = point
+
+    def _draw_paint_overlay(self, start, end, button: int):
+        if not self.app or self.base_image is None:
+            return
+        selected = self.app.brush_color.get()
+        color_name = selected if button == 1 else ("black" if selected == "white" else "white")
+        fill = "#ffffff" if color_name == "white" else "#000000"
+        outline = "#00e5ff" if color_name == "white" else "#ff4d6d"
