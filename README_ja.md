@@ -31,6 +31,9 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 - 日本語 / English をワンクリック切替
 - `output/元ファイル名/` 単位で自動整理
 - Paint.NET（Microsoft Store版 / デスクトップ版）の自動検出と、Windows「プログラムから開く…」に対応
+- カメラ・スマホ画像のEXIF回転を自動反映
+- 元画像に既存の透過がある場合、その透明部分をAI/手動マスクで誤って不透明に戻さない
+- 外部編集マスクのサイズが元画像と違う場合は自動リサイズせず、安全のため読み込みを中止
 
 ## Windowsでの導入
 
@@ -42,7 +45,7 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 
 Python 3.11 を使用します。Python 3.11 が無い場合、`winget` が利用できるWindowsではセットアップから導入できます。
 
-専用Python環境は `.venv/`、InSPyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
+専用Python環境は `.venv/`、InSpyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
 
 NVIDIA GPUが見つかった場合はPyTorch公式のCUDA 12.8 wheel indexを使ってGPU版を導入し、それ以外は通常の依存関係を導入します。
 
