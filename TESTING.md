@@ -34,6 +34,13 @@ This file tracks the practical checks used before publishing a release.
 - [x] Horizontal/tilt-wheel input does not accidentally zoom
 - [x] Paint.NET Microsoft Store detection
 - [x] External-mask export/reload workflow
+- [x] RC3: double-click Fit is disabled on the editable mask while Paint mode is active
+- [x] RC3: double-click Fit still works normally after switching back to Move mode
+- [x] RC3: optional Mask / Transparency Preview zoom and pan synchronization works
+
+### Known non-blocking performance note
+
+- When Mask / Transparency Preview view synchronization is enabled and the whole image is visible, synchronized panning can feel slightly less smooth than when zoomed in. This is currently considered non-blocking because the full visible image is redrawn in both panes on each view update; zoomed-in operation is smooth in practical use.
 
 ## Before making the repository public
 
