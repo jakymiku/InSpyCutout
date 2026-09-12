@@ -1,0 +1,220 @@
+        if start is None:
+            draw.ellipse((ex - radius, ey - radius, ex + radius, ey + radius), fill=value)
+        else:
+            sx, sy = start
+            draw.line((sx, sy, ex, ey), fill=value, width=size)
+            draw.ellipse((sx - radius, sy - radius, sx + radius, sy + radius), fill=value)
+            draw.ellipse((ex - radius, ey - radius, ex + radius, ey + radius), fill=value)
+
+        self._stroke_dirty = True
+        self.schedule_paint_preview()
+
+    def schedule_paint_preview(self):
+        # Brush feedback itself is drawn instantly on the mask canvas. The alpha preview
+        # is deliberately throttled so Tk/Pillow do not fight the mouse event loop.
+        if self._paint_preview_after is None:
+            self._paint_preview_after = self.after(self.paint_preview_ms, self._paint_preview_tick)
+
+    def _paint_preview_tick(self):
+        self._paint_preview_after = None
+        if not self._painting_active:
+            return
+        self.reprocess_preview(live_paint=True)
+
+    def undo_paint(self):
+        if self.raw_mask is None or not self.undo_stack:
+            self.status.set(f"Undo: {self.tr('no_history')}")
+            return
+        self.redo_stack.append(self.raw_mask.copy())
+        self.raw_mask = self.undo_stack.pop()
+        self.reprocess_preview(live_paint=False)
+        self.status.set("Undo")
+
+    def redo_paint(self):
+        if self.raw_mask is None or not self.redo_stack:
+            self.status.set(f"Redo: {self.tr('no_history')}")
+            return
+        self.undo_stack.append(self.raw_mask.copy())
+        self.raw_mask = self.redo_stack.pop()
+        self.reprocess_preview(live_paint=False)
+        self.status.set("Redo")
+
+    def _reset_history(self):
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self._stroke_before = None
+        self._stroke_dirty = False
+        self._painting_active = False
+
+    def _clamp_int_var(self, var: tk.IntVar, lo: int, hi: int):
+        try:
+            value = int(var.get())
+        except Exception:
+            value = lo
+        value = max(lo, min(hi, value))
+        try:
+            current = int(var.get())
+        except Exception:
+            current = None
+        if value != current:
+            var.set(value)
+        return value
+
+    def _on_black_changed(self):
+        if self._syncing_threshold:
+            return
+        self._syncing_threshold = True
+        try:
+            black = self._clamp_int_var(self.black_var, 0, 255)
+            white = self._clamp_int_var(self.white_var, 0, 255)
+            if black >= white:
+                if black >= 255:
+                    self.black_var.set(254)
+                    self.white_var.set(255)
+                else:
+                    self.white_var.set(black + 1)
+        finally:
+            self._syncing_threshold = False
+        self.schedule_reprocess()
+
+    def _on_white_changed(self):
+        if self._syncing_threshold:
+            return
+        self._syncing_threshold = True
+        try:
+            black = self._clamp_int_var(self.black_var, 0, 255)
+            white = self._clamp_int_var(self.white_var, 0, 255)
+            if white <= black:
+                if white <= 0:
+                    self.white_var.set(1)
+                    self.black_var.set(0)
+                else:
+                    self.black_var.set(white - 1)
+        finally:
+            self._syncing_threshold = False
+        self.schedule_reprocess()
+
+    def choose_source(self):
+        path = filedialog.askopenfilename(
+            title=self.tr("choose_image"),
+            filetypes=[("Image", "*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff"), ("All files", "*.*")],
+        )
+        if path:
+            self.load_source(Path(path), auto_generate=True)
+
+    def load_source(self, path: Path, auto_generate=True):
+        try:
+            self.source_path = path
+            self.source_rgba = Image.open(path).convert("RGBA")
+            self.raw_mask = None
+            self.processed_mask = None
+            self.result_rgba = None
+            self._reset_history()
+            self.mask_source_label.set(f"{self.tr('mask')}: {self.tr('none')}")
+            self.path_label.config(text=f"{self.tr('source')}: {path}")
+            self.status.set(self.tr("loaded", name=path.name))
+            self._show_original()
+            self.mask_panel.set_image(None)
+            self.result_panel.set_image(None)
+            if auto_generate:
+                self.generate_ai_mask()
+        except Exception as e:
+            messagebox.showerror(APP_TITLE, self.tr("image_load_failed", error=e))
+
+    def choose_mask(self):
+        if not self.source_rgba:
+            messagebox.showinfo(APP_TITLE, self.tr("need_image"))
+            return
+        path = filedialog.askopenfilename(
+            title=self.tr("choose_mask"),
+            filetypes=[("Image", "*.png *.jpg *.jpeg *.webp *.bmp"), ("All files", "*.*")],
+        )
+        if path:
+            self.load_mask(Path(path), label=f"Mask: {Path(path).name}")
+
+    def load_mask(self, path: Path, label=None):
+        try:
+            mask = Image.open(path).convert("L")
+            if mask.size != self.source_rgba.size:
+                mask = mask.resize(self.source_rgba.size, Image.Resampling.LANCZOS)
+            self.raw_mask = mask
+            self._reset_history()
+            self.mask_source_label.set(label or f"{self.tr('mask')}: {path.name}")
+            self.status.set(self.tr("mask_loaded", name=path.name))
+            self.reprocess_preview()
+        except Exception as e:
+            messagebox.showerror(APP_TITLE, self.tr("mask_load_failed", error=e))
+
+    def _make_remover(self):
+        if self.remover is not None:
+            return self.remover
+        from transparent_background import Remover
+
+        mode = cfg_get(self.cfg, "inspy", "mode", "base")
+        device = cfg_get(self.cfg, "inspy", "device", "auto").strip().lower()
+        jit = as_bool(cfg_get(self.cfg, "inspy", "torchscript", "0"))
+        resize = cfg_get(self.cfg, "inspy", "resize", "static")
+        if device == "auto":
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = "cuda:0"
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    device = "mps"
+                else:
+                    device = "cpu"
+            except Exception:
+                device = "cpu"
+        try:
+            self.remover = Remover(mode=mode, device=device, jit=jit, resize=resize)
+        except TypeError:
+            try:
+                self.remover = Remover(mode=mode, device=device, jit=jit)
+            except TypeError:
+                try:
+                    self.remover = Remover(mode=mode, jit=jit)
+                except TypeError:
+                    self.remover = Remover()
+        return self.remover
+
+    def generate_ai_mask(self):
+        if not self.source_rgba or not self.source_path:
+            messagebox.showinfo(APP_TITLE, self.tr("need_image"))
+            return
+
+        self.status.set(self.tr("generating"))
+        self.progress.start(10)
+        source = self.source_rgba.convert("RGB")
+
+        def worker():
+            try:
+                remover = self._make_remover()
+                result = remover.process(source, type="rgba")
+                if isinstance(result, Image.Image):
+                    rgba = result.convert("RGBA")
+                else:
+                    try:
+                        import numpy as np
+
+                        arr = np.asarray(result)
+                        if arr.dtype != np.uint8:
+                            if arr.max() <= 1.0:
+                                arr = (arr * 255.0).clip(0, 255).astype(np.uint8)
+                            else:
+                                arr = arr.clip(0, 255).astype(np.uint8)
+                        rgba = Image.fromarray(arr).convert("RGBA")
+                    except Exception as exc:
+                        raise RuntimeError(f"Unsupported result type: {type(result)!r}") from exc
+
+                if rgba.size != source.size:
+                    rgba = rgba.resize(source.size, Image.Resampling.LANCZOS)
+                raw = rgba.getchannel("A")
+                self.worker_queue.put(("mask", raw))
+            except Exception as e:
+                self.worker_queue.put(("error", str(e)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _poll_worker(self):
+        try:
+            while True:
