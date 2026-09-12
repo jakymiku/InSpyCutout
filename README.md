@@ -34,6 +34,8 @@ The intended workflow is simple:
 - EXIF orientation is applied automatically for camera/smartphone images
 - Existing source transparency is preserved and cannot be accidentally made opaque by the generated mask
 - External/edited masks with the wrong dimensions are rejected instead of silently resized
+- Optional linked zoom/pan/fit between the Mask and Transparency Preview panes
+- Double-click fit is suppressed on the mask pane while Paint mode is active, so double-click painting does not unexpectedly reset the view
 
 ## Recommended environment
 
@@ -110,9 +112,12 @@ output/
 [ui]
 language=auto
 paint_preview_ms=90
+sync_mask_preview=1
 ```
 
 `language=auto` uses Japanese on a Japanese OS and English elsewhere. The GUI language can also be changed with one click and the choice is saved.
+
+`sync_mask_preview=1` keeps the Mask and Transparency Preview panes on the same image region while zooming, panning, or fitting the image. The GUI checkbox can turn this on or off at any time, and the choice is saved.
 
 ### External mask editor
 
