@@ -5,6 +5,7 @@ import configparser
 import locale
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -30,6 +31,9 @@ STRINGS = {
         "reset": "初期値に戻す", "save_settings": "設定を config.ini に保存",
         "editor": "マスク編集アプリ", "custom_exe": "カスタムEXEを選択",
         "paintnet_store": "Paint.NET(Store)に設定", "quick_paint": "簡易マスクペイント",
+        "editor_mode_auto": "自動検出 (推奨)", "editor_mode_store": "Paint.NET (Microsoft Store)",
+        "editor_mode_desktop": "Paint.NET (デスクトップ版)", "editor_mode_open_with": "Windows「プログラムから開く…」",
+        "editor_mode_custom": "カスタムEXE", "detect_paintnet": "Paint.NETを自動検出",
         "operation": "操作:", "move": "移動 (M)", "paint": "ペイント (B)", "brush": "ブラシ:",
         "white_keep": "白(残す)", "black_remove": "黒(消す)", "invert_color": "色反転 (X)",
         "size": "サイズ", "paint_help": "左=選択色 / 右=反対色 / Space押下中=一時移動 / 中ボタンドラッグ=移動",
@@ -53,6 +57,12 @@ STRINGS = {
         "settings_saved": "config.ini に現在値を保存しました", "config_missing": "config.ini が見つかりません。\n{path}",
         "choose_image": "元画像を選択", "choose_mask": "マスク画像を選択", "choose_editor": "外部マスク編集アプリを選択",
         "mask_ai": "InSPyReNet", "mask_edited": "編集済み",
+        "paintnet_detected_store": "Paint.NET (Microsoft Store) を検出しました。",
+        "paintnet_detected_desktop": "Paint.NET を検出しました。\n{path}",
+        "paintnet_not_found": "Paint.NET が見つかりませんでした。\nWindowsの「プログラムから開く…」を使用します。",
+        "custom_editor_missing": "設定されたカスタムEXEが見つかりません。\nWindowsの「プログラムから開く…」を表示します。\n\n{path}",
+        "store_paintnet_missing": "Microsoft Store版 Paint.NET を検出できませんでした。\nWindowsの「プログラムから開く…」を表示します。",
+        "desktop_paintnet_missing": "デスクトップ版 Paint.NET を検出できませんでした。\nWindowsの「プログラムから開く…」を表示します。",
     },
     "en": {
         "open_image": "Open Image", "regenerate": "Regenerate AI Mask", "load_mask": "Load Mask",
@@ -64,6 +74,9 @@ STRINGS = {
         "reset": "Reset", "save_settings": "Save Settings to config.ini",
         "editor": "Mask Editor", "custom_exe": "Choose Custom EXE",
         "paintnet_store": "Use Paint.NET (Store)", "quick_paint": "Quick Mask Paint",
+        "editor_mode_auto": "Auto Detect (Recommended)", "editor_mode_store": "Paint.NET (Microsoft Store)",
+        "editor_mode_desktop": "Paint.NET (Desktop)", "editor_mode_open_with": "Windows “Open with…”",
+        "editor_mode_custom": "Custom EXE", "detect_paintnet": "Detect Paint.NET",
         "operation": "Mode:", "move": "Move (M)", "paint": "Paint (B)", "brush": "Brush:",
         "white_keep": "White (Keep)", "black_remove": "Black (Remove)", "invert_color": "Swap Color (X)",
         "size": "Size", "paint_help": "Left=selected color / Right=opposite / Hold Space or middle-drag to pan",
@@ -86,7 +99,23 @@ STRINGS = {
         "settings_saved": "Saved current values to config.ini", "config_missing": "config.ini was not found.\n{path}",
         "choose_image": "Choose Source Image", "choose_mask": "Choose Mask Image", "choose_editor": "Choose External Mask Editor",
         "mask_ai": "InSPyReNet", "mask_edited": "edited",
+        "paintnet_detected_store": "Paint.NET (Microsoft Store) was detected.",
+        "paintnet_detected_desktop": "Paint.NET was detected.\n{path}",
+        "paintnet_not_found": "Paint.NET was not found.\nWindows “Open with…” will be used.",
+        "custom_editor_missing": "The configured custom EXE was not found.\nWindows “Open with…” will be shown.\n\n{path}",
+        "store_paintnet_missing": "Paint.NET (Microsoft Store) was not detected.\nWindows “Open with…” will be shown.",
+        "desktop_paintnet_missing": "Paint.NET (Desktop) was not detected.\nWindows “Open with…” will be shown.",
     },
+}
+
+
+EDITOR_MODES = ("auto", "paintnet_store", "paintnet_desktop", "windows_open_with", "custom_exe")
+EDITOR_MODE_KEYS = {
+    "auto": "editor_mode_auto",
+    "paintnet_store": "editor_mode_store",
+    "paintnet_desktop": "editor_mode_desktop",
+    "windows_open_with": "editor_mode_open_with",
+    "custom_exe": "editor_mode_custom",
 }
 
 
@@ -94,6 +123,24 @@ def app_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
+
+
+def configure_local_caches() -> None:
+    cache_root = app_dir() / "cache"
+    cache_paths = {
+        "PIP_CACHE_DIR": cache_root / "pip",
+        "TRANSPARENT_BACKGROUND_FILE_PATH": cache_root / "models",
+        "TORCH_HOME": cache_root / "torch",
+        "TORCH_EXTENSIONS_DIR": cache_root / "torch_extensions",
+        "HF_HOME": cache_root / "huggingface",
+        "XDG_CACHE_HOME": cache_root / "xdg",
+    }
+    for key, path in cache_paths.items():
+        path.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault(key, str(path))
+
+
+configure_local_caches()
 
 
 def load_cfg(path: Path) -> configparser.ConfigParser:
@@ -181,40 +228,3 @@ class ZoomImagePane(ttk.LabelFrame):
 
         self.canvas = tk.Canvas(self, bg="#202020", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
-        hint_text = app.tr("hint_paint" if editable else "hint_view") if app else ""
-        self.hint = ttk.Label(self, text=hint_text, anchor="center")
-        self.hint.pack(fill="x", pady=(4, 0))
-
-        self.base_image: Image.Image | None = None
-        self.photo = None
-        self.checker = False
-        self.fast_render = False
-        self.user_scale = 1.0
-        self.pan_x = 0.0
-        self.pan_y = 0.0
-        self._drag_start: tuple[int, int] | None = None
-        self._drag_pan_start: tuple[float, float] | None = None
-        self._last_size = (1, 1)
-        self._drag_mode: str | None = None
-        self._paint_button: int | None = None
-        self._last_paint_point: tuple[float, float] | None = None
-        self._brush_cursor_id = None
-
-        self.canvas.bind("<Configure>", self._on_resize)
-        self.canvas.bind("<ButtonPress-1>", self._on_left_press)
-        self.canvas.bind("<B1-Motion>", self._on_left_motion)
-        self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
-        self.canvas.bind("<ButtonPress-2>", self._on_middle_press)
-        self.canvas.bind("<B2-Motion>", self._on_middle_motion)
-        self.canvas.bind("<ButtonRelease-2>", self._on_middle_release)
-        self.canvas.bind("<ButtonPress-3>", self._on_right_press)
-        self.canvas.bind("<B3-Motion>", self._on_right_motion)
-        self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
-        self.canvas.bind("<Double-Button-1>", self._on_double_click)
-        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self.canvas.bind("<Button-4>", self._on_linux_wheel)
-        self.canvas.bind("<Button-5>", self._on_linux_wheel)
-        self.canvas.bind("<Motion>", self._on_pointer_motion)
-        self.canvas.bind("<Leave>", self._on_pointer_leave)
-
-    def update_language(self):
