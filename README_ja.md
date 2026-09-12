@@ -36,6 +36,23 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 - 元画像に既存の透過がある場合、その透明部分をAI/手動マスクで誤って不透明に戻さない
 - 外部編集マスクのサイズが元画像と違う場合は自動リサイズせず、安全のため読み込みを中止
 
+## 推奨動作環境
+
+| 項目 | 推奨 / 補足 |
+|---|---|
+| OS | 64bit版 Windows 10 / Windows 11 |
+| Python | Python 3.11。未導入で `winget` が利用可能な場合はSetupから自動導入できます。 |
+| GPU | **CUDA対応のNVIDIA GPUを推奨**。AIマスク生成が大幅に高速になります。 |
+| GPUなし / CPUのみ | 動作可能です。ただしAIマスク生成はGPU使用時よりかなり遅くなる場合があります。 |
+| AMD / Intel GPU | 現行Windows版ではAMD / Intel GPU向けのアクセラレーションは設定していないため、現状はCPU推論になります。 |
+| メモリ | 快適に使うなら16GB以上を推奨します。 |
+| 空き容量 | PyTorch、専用Python環境、InSPyReNetモデル、ローカルキャッシュ用に数GB以上の空き容量が必要です。セットアップ時は余裕を持たせることを推奨します。 |
+| インターネット | 初回セットアップとモデル / パッケージのダウンロード時に必要です。セットアップ後の通常の画像処理はローカルで行います。 |
+
+NVIDIA GPUを検出した場合、SetupはPyTorch公式の **CUDA 12.8** ビルドを導入します。そのため、比較的新しいNVIDIAドライバーの利用を推奨します。
+
+GPUごとの動作検証はまだ十分ではないため、現時点では「VRAM○GB以上」のような厳密な最低要件は設定していません。CUDAが利用できない環境でも、InSpyCutout自体はCPUへフォールバックして動作できます。
+
 ## Windowsでの導入
 
 1. Release ZIP をダウンロードして展開
@@ -46,7 +63,7 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 
 Python 3.11 を使用します。Python 3.11 が無い場合、`winget` が利用できるWindowsではセットアップから導入できます。
 
-専用Python環境は `.venv/`、InSPyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
+専用Python環境は `.venv/`、InSpyReNetモデル・pipキャッシュ・PyTorch関連キャッシュなどのアプリ専用キャッシュは `cache/` に保存します。ComfyUIなど、他のPython環境へパッケージをインストールしません。
 
 NVIDIA GPUが見つかった場合はPyTorch公式のCUDA 12.8 wheel indexを使ってGPU版を導入し、それ以外は通常の依存関係を導入します。
 
@@ -130,7 +147,7 @@ AI切り抜きはすでにかなり高精度ですが、髪の毛一本、背景
 
 ## クレジット
 
-背景除去には [transparent-background](https://github.com/plemeri/transparent-background) と [InSPyReNet](https://github.com/plemeri/InSPyReNet) を利用しています。
+背景除去には [transparent-background](https://github.com/plemeri/transparent-background) と [InSPyReNet](https://github.com/plemeri/InSpyReNet) を利用しています。
 
 ## ライセンス
 
