@@ -35,6 +35,8 @@ InSpyCutout は `transparent-background` 経由で **InSPyReNet** を使用し�
 - カメラ・スマホ画像のEXIF回転を自動反映
 - 元画像に既存の透過がある場合、その透明部分をAI/手動マスクで誤って不透明に戻さない
 - 外部編集マスクのサイズが元画像と違う場合は自動リサイズせず、安全のため読み込みを中止
+- マスクと透過プレビューのズーム / 移動 / フィットを同期する機能（ON/OFF切替可能）
+- ペイントモード中はマスク上のダブルクリックでフィットしないため、連続クリック時に表示位置が勝手に戻らない
 
 ## 推奨動作環境
 
@@ -114,9 +116,12 @@ output/
 [ui]
 language=auto
 paint_preview_ms=90
+sync_mask_preview=1
 ```
 
 `language=auto` の場合、日本語環境では日本語、それ以外では英語で起動します。GUI右上のボタンからワンクリックで切り替えでき、その選択は保存されます。
+
+`sync_mask_preview=1` の場合、マスクと透過プレビューはズーム・移動・フィット時に同じ画像位置を表示します。GUIのチェックボックスからいつでもON/OFFでき、選択状態も保存されます。
 
 ### 外部マスクエディター
 
@@ -147,7 +152,7 @@ AI切り抜きはすでにかなり高精度ですが、髪の毛一本、背景
 
 ## クレジット
 
-背景除去には [transparent-background](https://github.com/plemeri/transparent-background) と [InSPyReNet](https://github.com/plemeri/InSpyReNet) を利用しています。
+背景除去には [transparent-background](https://github.com/plemeri/transparent-background) と [InSPyReNet](https://github.com/plemeri/InSPyReNet) を利用しています。
 
 ## ライセンス
 
