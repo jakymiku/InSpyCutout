@@ -1,0 +1,222 @@
+                kind, payload = self.worker_queue.get_nowait()
+                if kind == "mask":
+                    self.progress.stop()
+                    self.raw_mask = payload
+                    self._reset_history()
+                    self.mask_source_label.set(f"{self.tr('mask')}: {self.tr('mask_ai')}")
+                    self.status.set(self.tr("generated"))
+                    self.reprocess_preview()
+                elif kind == "error":
+                    self.progress.stop()
+                    self.status.set(self.tr("generate_failed"))
+                    hint = ""
+                    if "could not be broadcast together" in payload:
+                        hint = self.tr("channel_hint")
+                    messagebox.showerror(APP_TITLE, self.tr("ai_failed", error=payload, hint=hint))
+        except queue.Empty:
+            pass
+        self.after(100, self._poll_worker)
+
+    def schedule_reprocess(self):
+        if self._preview_after is not None:
+            try:
+                self.after_cancel(self._preview_after)
+            except Exception:
+                pass
+        self._preview_after = self.after(80, self.reprocess_preview)
+
+    def reprocess_preview(self, live_paint: bool = False):
+        self._preview_after = None
+        if self.raw_mask is None or self.source_rgba is None:
+            return
+
+        mask = self.raw_mask.copy().convert("L")
+        offset = int(self.offset_var.get())
+        blur = float(self.blur_var.get())
+        black = int(self.black_var.get())
+        white = int(self.white_var.get())
+        gamma = float(self.gamma_var.get())
+
+        if offset != 0:
+            mask = apply_offset(mask, offset)
+        if blur > 0:
+            mask = mask.filter(ImageFilter.GaussianBlur(radius=blur))
+        mask = apply_thresholds(mask, black, white)
+        mask = apply_gamma(mask, gamma)
+
+        self.processed_mask = mask
+        result = self.source_rgba.copy()
+        result.putalpha(mask)
+        self.result_rgba = result
+
+        self.mask_panel.set_image(
+            mask.convert("RGB"), checker=False, reset_view=False, fast=live_paint
+        )
+        self.result_panel.set_image(
+            result, checker=True, reset_view=False, fast=live_paint
+        )
+
+        self.status.set(
+            f"Preview: gamma={gamma:.2f} offset={offset} blur={blur:.1f} black={black} white={white}"
+        )
+
+    def _show_original(self):
+        if self.source_rgba:
+            self.original_panel.set_image(self.source_rgba, checker=False)
+
+    def current_output_dir(self) -> Path | None:
+        if not self.source_path:
+            return None
+        out = self.output_root / self.source_path.stem
+        out.mkdir(parents=True, exist_ok=True)
+        return out
+
+    def save_all(self):
+        if self.result_rgba is None or self.processed_mask is None or not self.source_path:
+            messagebox.showinfo(APP_TITLE, self.tr("need_image_mask"))
+            return
+
+        out = self.current_output_dir()
+        cutout = out / f"{self.source_path.stem}_cutout.png"
+        mask = out / f"{self.source_path.stem}_mask.png"
+        self.result_rgba.save(cutout)
+        self.processed_mask.save(mask)
+
+        if self.raw_mask is not None:
+            raw = out / f"{self.source_path.stem}_raw_mask.png"
+            self.raw_mask.save(raw)
+
+        self.status.set(f"Saved: {out}")
+        messagebox.showinfo(APP_TITLE, self.tr("saved", path=out))
+
+    def export_mask_for_edit(self):
+        if self.processed_mask is None or not self.source_path:
+            messagebox.showinfo(APP_TITLE, self.tr("need_mask"))
+            return
+
+        out = self.current_output_dir()
+        path = out / f"{self.source_path.stem}_edit_mask.png"
+        self.processed_mask.save(path)
+        self.status.set(f"Edit mask exported: {path.name}")
+
+        mode = self.editor_mode.get().strip()
+        editor = cfg_get(self.cfg, "editor", "mask_editor", "").strip().strip('"')
+        try:
+            if mode == "paintnet_store" and os.name == "nt":
+                target = f"shell:AppsFolder\\{self.paintnet_aumid}"
+                subprocess.Popen(
+                    ["cmd.exe", "/d", "/c", "start", "", target, str(path)],
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            elif mode == "custom_exe" and editor and Path(editor).exists():
+                subprocess.Popen([editor, str(path)])
+            elif os.name == "nt":
+                os.startfile(str(path))
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception as e:
+            messagebox.showwarning(
+                APP_TITLE,
+                self.tr("editor_failed", error=e),
+            )
+
+    def reload_edit_mask(self):
+        if not self.source_path:
+            messagebox.showinfo(APP_TITLE, self.tr("need_image"))
+            return
+        out = self.current_output_dir()
+        path = out / f"{self.source_path.stem}_edit_mask.png"
+        if not path.exists():
+            messagebox.showinfo(APP_TITLE, self.tr("edit_mask_missing", path=path))
+            return
+        self.load_mask(path, label=f"{self.tr('mask')}: {self.tr('mask_edited')} ({path.name})")
+
+    def open_output_folder(self):
+        out = self.current_output_dir() if self.source_path else self.output_root
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            if os.name == "nt":
+                os.startfile(str(out))
+            else:
+                subprocess.Popen(["xdg-open", str(out)])
+        except Exception as e:
+            messagebox.showerror(APP_TITLE, str(e))
+
+    def reset_sliders(self):
+        self.gamma_var.set(cfg_get(self.cfg, "defaults", "alpha_gamma", 0.72, float))
+        self.offset_var.set(cfg_get(self.cfg, "defaults", "mask_offset", 0, int))
+        self.blur_var.set(cfg_get(self.cfg, "defaults", "mask_blur", 0.0, float))
+        self.black_var.set(cfg_get(self.cfg, "defaults", "black_threshold", 0, int))
+        self.white_var.set(cfg_get(self.cfg, "defaults", "white_threshold", 250, int))
+        self.reprocess_preview()
+
+    def save_settings(self):
+        if not self.cfg.has_section("defaults"):
+            self.cfg.add_section("defaults")
+        self.cfg["defaults"]["alpha_gamma"] = f"{self.gamma_var.get():.3f}"
+        self.cfg["defaults"]["mask_offset"] = str(int(self.offset_var.get()))
+        self.cfg["defaults"]["mask_blur"] = f"{self.blur_var.get():.2f}"
+        self.cfg["defaults"]["black_threshold"] = str(int(self.black_var.get()))
+        self.cfg["defaults"]["white_threshold"] = str(int(self.white_var.get()))
+        if not self.cfg.has_section("ui"):
+            self.cfg.add_section("ui")
+        self.cfg["ui"]["language"] = self.language
+        if not self.cfg.has_section("paint"):
+            self.cfg.add_section("paint")
+        self.cfg["paint"]["mode"] = self.interaction_mode.get()
+        self.cfg["paint"]["brush_color"] = self.brush_color.get()
+        self.cfg["paint"]["brush_size"] = str(int(self.brush_size_var.get()))
+        self._write_cfg()
+        self.status.set(self.tr("settings_saved"))
+
+    def _write_cfg(self):
+        with self.cfg_path.open("w", encoding="utf-8") as f:
+            self.cfg.write(f)
+
+    def save_editor_mode(self):
+        if not self.cfg.has_section("editor"):
+            self.cfg.add_section("editor")
+        self.cfg["editor"]["mode"] = self.editor_mode.get()
+        self.cfg["editor"]["paintnet_aumid"] = self.paintnet_aumid
+        self._write_cfg()
+        self.status.set(f"Editor mode: {self.editor_mode.get()}")
+
+    def use_store_paintnet(self):
+        self.editor_mode.set("paintnet_store")
+        self.paintnet_aumid = "dotPDNLLC.paint.net_h55e3w7q8jbva!dotPDNLLC.paint.net"
+        self.save_editor_mode()
+        self.status.set("Editor: Paint.NET (Microsoft Store)")
+
+    def choose_editor(self):
+        path = filedialog.askopenfilename(
+            title=self.tr("choose_editor"),
+            filetypes=[("Executable", "*.exe"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        if not self.cfg.has_section("editor"):
+            self.cfg.add_section("editor")
+        self.cfg["editor"]["mask_editor"] = path
+        self.cfg["editor"]["mode"] = "custom_exe"
+        self.editor_mode.set("custom_exe")
+        self._write_cfg()
+        self.status.set(f"Editor: {path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--config", default=str(app_dir() / "config.ini"))
+    parser.add_argument("image", nargs="?")
+    args = parser.parse_args()
+
+    cfg_path = Path(args.config)
+    if not cfg_path.exists():
+        messagebox.showerror(APP_TITLE, STRINGS["en"]["config_missing"].format(path=cfg_path))
+        return
+
+    app = App(cfg_path, initial_image=args.image)
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
