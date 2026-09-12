@@ -12,8 +12,10 @@ This file tracks the practical checks used before publishing a release.
 - [x] First-run setup does not create duplicate GUI windows
 - [x] GitHub Actions syntax-checks the Python source before packaging
 - [x] GitHub Actions produces a Windows ZIP artifact
-- [x] Release ZIP contains a normal single `InSpyCutout.py`
-- [x] Release ZIP excludes `__pycache__`, `.pyc`, and `.pyo`
+- [x] Final `main` Actions run completes successfully
+- [x] Final Actions artifact contains a normal single `InSpyCutout.py`
+- [x] Final Actions artifact excludes `__pycache__`, `.pyc`, and `.pyo`
+- [x] Packaged `InSpyCutout.py` and `tools/preload_model.py` compile successfully
 
 ## Image / mask handling
 
@@ -37,16 +39,22 @@ This file tracks the practical checks used before publishing a release.
 - [x] RC3: double-click Fit is disabled on the editable mask while Paint mode is active
 - [x] RC3: double-click Fit still works normally after switching back to Move mode
 - [x] RC3: optional Mask / Transparency Preview zoom and pan synchronization works
+- [x] View-sync status text follows the selected UI language
 
 ### Known non-blocking performance note
 
 - When Mask / Transparency Preview view synchronization is enabled and the whole image is visible, synchronized panning can feel slightly less smooth than when zoomed in. This is currently considered non-blocking because the full visible image is redrawn in both panes on each view update; zoomed-in operation is smooth in practical use.
 
+## Documentation
+
+- [x] English README reviewed for public-facing content
+- [x] Japanese README reviewed for public-facing content
+- [x] Sanitized GUI screenshot added to both READMEs
+- [x] Third-party notices included in the package
+
 ## Before making the repository public
 
-- [ ] Run the latest GitHub Actions artifact on a fresh extracted folder
-- [ ] Confirm `Setup.bat` completes with the latest artifact
-- [ ] Confirm AI mask generation and save work from that artifact
-- [ ] Confirm README and third-party notices match the packaged version
-- [ ] Optionally add a sanitized GUI screenshot to the README
+- [ ] Run the latest GitHub Actions artifact on a fresh extracted Windows folder
+- [ ] Confirm `Setup.bat` completes from that exact artifact
+- [ ] Confirm AI mask generation and Save work from that exact artifact
 - [ ] Create the `v0.1.0` tag only after the final artifact passes
