@@ -25,7 +25,7 @@ jobs:
           $items = @(
             'InSpyCutout.py','Launch_GUI.bat','Setup.bat','setup.ps1','config.ini',
             'requirements.txt','README.md','README_ja.md','LICENSE','THIRD_PARTY_NOTICES.md',
-            'CHANGELOG.md','tools'
+            'CHANGELOG.md','tools','src'
           )
           foreach ($item in $items) { Copy-Item $item $stage -Recurse -Force }
           Compress-Archive -Path $stage -DestinationPath "dist/InSpyCutout-$version-Windows.zip" -Force
