@@ -25,14 +25,36 @@ jobs:
       - name: Build and syntax-check release source
         shell: pwsh
         run: |
-          $parts = Get-ChildItem "src/InSpyCutout.part*.py.txt" | Sort-Object Name
-          if (-not $parts) { throw "InSpyCutout source parts are missing." }
-          $source = ($parts | ForEach-Object { Get-Content -Raw -Encoding UTF8 $_.FullName }) -join ""
+          if (Test-Path "src") {
+            $parts = Get-ChildItem "src/InSpyCutout.part*.py.txt" | Sort-Object Name
+            if (-not $parts) { throw "InSpyCutout source parts are missing." }
+            $source = ($parts | ForEach-Object { Get-Content -Raw -Encoding UTF8 $_.FullName }) -join ""
+          }
+          else {
+            $source = Get-Content -Raw -Encoding UTF8 "InSpyCutout.py"
+          }
           [System.IO.File]::WriteAllText("InSpyCutout.release.py", $source, [System.Text.UTF8Encoding]::new($false))
           $env:PYTHONDONTWRITEBYTECODE = "1"
           python -m py_compile InSpyCutout.release.py tools/preload_model.py
           Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Get-ChildItem -Recurse -File -Include *.pyc,*.pyo | Remove-Item -Force -ErrorAction SilentlyContinue
+
+      - name: Normalize repository source layout
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          if (Test-Path "src") {
+            Copy-Item "InSpyCutout.release.py" "InSpyCutout.py" -Force
+            git rm -r src
+            git add InSpyCutout.py
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git diff --cached --quiet
+            if ($LASTEXITCODE -ne 0) {
+              git commit -m "Normalize application source layout"
+              git push
+            }
+          }
 
       - name: Build ZIP
         shell: pwsh
