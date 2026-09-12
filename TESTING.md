@@ -54,7 +54,7 @@ This file tracks the practical checks used before publishing a release.
 
 ## Before making the repository public
 
-- [ ] Run the latest GitHub Actions artifact on a fresh extracted Windows folder
-- [ ] Confirm `Setup.bat` completes from that exact artifact
-- [ ] Confirm AI mask generation and Save work from that exact artifact
+- [x] Run the latest GitHub Actions artifact on a fresh extracted Windows folder
+- [x] Confirm `Setup.bat` completes from that exact artifact
+- [x] Confirm AI mask generation and Save work from that exact artifact
 - [ ] Create the `v0.1.0` tag only after the final artifact passes
