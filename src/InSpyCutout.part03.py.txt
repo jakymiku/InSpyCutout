@@ -1,0 +1,220 @@
+        self._write_cfg()
+        self.apply_language()
+
+    def apply_language(self):
+        for widget, key in self._i18n_widgets:
+            try:
+                widget.configure(text=self.tr(key))
+            except Exception:
+                pass
+        self.language_button.configure(text=self.tr("switch_language"))
+        for pane in (getattr(self, "original_panel", None), getattr(self, "mask_panel", None), getattr(self, "result_panel", None)):
+            if pane:
+                pane.update_language()
+        if getattr(self, "original_panel", None):
+            self.original_panel.configure(text=self.tr("panel_original"))
+            self.mask_panel.configure(text=self.tr("panel_mask"))
+            self.result_panel.configure(text=self.tr("panel_result"))
+        if self.source_path:
+            self.path_label.configure(text=f"{self.tr('source')}: {self.source_path}")
+        else:
+            self.path_label.configure(text=f"{self.tr('source')}: {self.tr('none')}")
+
+    def _build_ui(self):
+        top = ttk.Frame(self, padding=8)
+        top.pack(fill="x")
+
+        for key, command, padx in [
+            ("open_image", self.choose_source, 4), ("regenerate", self.generate_ai_mask, 4),
+            ("load_mask", self.choose_mask, 4), ("edit_external", self.export_mask_for_edit, 4),
+            ("reload_edit", self.reload_edit_mask, 4), ("save", self.save_all, 14),
+            ("open_output", self.open_output_folder, 4),
+        ]:
+            self._iw(ttk.Button(top, command=command), key).pack(side="left", padx=padx)
+        self.language_button = ttk.Button(top, text=self.tr("switch_language"), command=self.toggle_language)
+        self.language_button.pack(side="right", padx=4)
+
+        path_row = ttk.Frame(self, padding=(8, 0, 8, 4))
+        path_row.pack(fill="x")
+        self.path_label = ttk.Label(path_row, text=f"{self.tr('source')}: {self.tr('none')}")
+        self.path_label.pack(side="left", fill="x", expand=True)
+        ttk.Label(path_row, textvariable=self.mask_source_label).pack(side="right")
+
+        controls = self._iw(ttk.LabelFrame(self, padding=8), "fine_tune")
+        controls.pack(fill="x", padx=8, pady=4)
+        self._add_scale(controls, "Alpha Gamma", self.gamma_var, 0.30, 1.50, 0.01, 0, "gamma_note", "float2")
+        self._add_scale(controls, "Mask Offset", self.offset_var, -5, 5, 1, 1, "offset_note", "int")
+        self._add_scale(controls, "Mask Blur", self.blur_var, 0.0, 5.0, 0.1, 2, "blur_note", "float1")
+        self._add_scale(controls, "Black Threshold", self.black_var, 0, 255, 1, 3, "black_note", "int")
+        self._add_scale(controls, "White Threshold", self.white_var, 0, 255, 1, 4, "white_note", "int")
+
+        side = ttk.Frame(controls)
+        side.grid(row=0, column=5, rowspan=5, sticky="ns", padx=(18, 0))
+        self._iw(ttk.Button(side, command=self.reset_sliders), "reset").pack(fill="x", pady=3)
+        self._iw(ttk.Button(side, command=self.save_settings), "save_settings").pack(fill="x", pady=3)
+        self._iw(ttk.Label(side), "editor").pack(anchor="w", pady=(10, 2))
+        editor_combo = ttk.Combobox(side, textvariable=self.editor_mode, state="readonly", values=("paintnet_store", "windows_default", "custom_exe"), width=18)
+        editor_combo.pack(fill="x", pady=2)
+        editor_combo.bind("<<ComboboxSelected>>", lambda _e: self.save_editor_mode())
+        self._iw(ttk.Button(side, command=self.choose_editor), "custom_exe").pack(fill="x", pady=3)
+        self._iw(ttk.Button(side, command=self.use_store_paintnet), "paintnet_store").pack(fill="x", pady=3)
+
+        paintbar = self._iw(ttk.LabelFrame(self, padding=(8, 5)), "quick_paint")
+        paintbar.pack(fill="x", padx=8, pady=(2, 4))
+        self._iw(ttk.Label(paintbar), "operation").pack(side="left", padx=(0, 4))
+        self._iw(ttk.Radiobutton(paintbar, value="move", variable=self.interaction_mode, command=self.on_mode_changed), "move").pack(side="left", padx=3)
+        self._iw(ttk.Radiobutton(paintbar, value="paint", variable=self.interaction_mode, command=self.on_mode_changed), "paint").pack(side="left", padx=3)
+        ttk.Separator(paintbar, orient="vertical").pack(side="left", fill="y", padx=10)
+        self._iw(ttk.Label(paintbar), "brush").pack(side="left")
+        self._iw(ttk.Radiobutton(paintbar, value="white", variable=self.brush_color, command=self.on_brush_changed), "white_keep").pack(side="left", padx=3)
+        self._iw(ttk.Radiobutton(paintbar, value="black", variable=self.brush_color, command=self.on_brush_changed), "black_remove").pack(side="left", padx=3)
+        self._iw(ttk.Button(paintbar, command=self.swap_brush_color), "invert_color").pack(side="left", padx=5)
+        self._iw(ttk.Label(paintbar), "size").pack(side="left", padx=(12, 3))
+        tk.Scale(paintbar, from_=1, to=200, resolution=1, orient="horizontal", variable=self.brush_size_var, length=220).pack(side="left")
+        ttk.Spinbox(paintbar, from_=1, to=200, increment=1, textvariable=self.brush_size_var, width=6).pack(side="left", padx=3)
+        ttk.Separator(paintbar, orient="vertical").pack(side="left", fill="y", padx=10)
+        ttk.Button(paintbar, text="Undo (Ctrl+Z)", command=self.undo_paint).pack(side="left", padx=3)
+        ttk.Button(paintbar, text="Redo (Ctrl+Y)", command=self.redo_paint).pack(side="left", padx=3)
+        self._iw(ttk.Label(paintbar), "paint_help").pack(side="left", padx=(12, 0))
+
+        previews = ttk.Frame(self, padding=8)
+        previews.pack(fill="both", expand=True)
+        for col in range(3): self._dummy = col; previews.columnconfigure(col, weight=1)
+        previews.rowconfigure(0, weight=1)
+        self.original_panel = ZoomImagePane(previews, self.tr("panel_original"), app=self, editable=False)
+        self.original_panel.grid(row=0, column=0, sticky="nsew", padx=4)
+        self.mask_panel = ZoomImagePane(previews, self.tr("panel_mask"), app=self, editable=True)
+        self.mask_panel.grid(row=0, column=1, sticky="nsew", padx=4)
+        self.result_panel = ZoomImagePane(previews, self.tr("panel_result"), app=self, editable=False)
+        self.result_panel.grid(row=0, column=2, sticky="nsew", padx=4)
+
+        bottom = ttk.Frame(self, padding=8)
+        bottom.pack(fill="x")
+        ttk.Label(bottom, textvariable=self.status).pack(side="left")
+        self.progress = ttk.Progressbar(bottom, mode="indeterminate", length=240)
+        self.progress.pack(side="right")
+
+    def _add_scale(self, parent, label, var, frm, to, resolution, row, note_key, spin_format="int"):
+        ttk.Label(parent, text=label, width=17).grid(row=row, column=0, sticky="w")
+        scale = tk.Scale(parent, from_=frm, to=to, resolution=resolution, orient="horizontal", variable=var, length=360, command=lambda _=None: self.schedule_reprocess())
+        scale.grid(row=row, column=1, sticky="ew", padx=5)
+        if spin_format == "int":
+            spin = ttk.Spinbox(parent, from_=frm, to=to, increment=resolution, textvariable=var, width=8)
+        else:
+            spin = ttk.Spinbox(parent, from_=frm, to=to, increment=resolution, textvariable=var, width=8, format="%.2f")
+        spin.grid(row=row, column=2, padx=(4, 2))
+        for event in ("<KeyRelease>", "<FocusOut>", "<<Increment>>", "<<Decrement>>"):
+            spin.bind(event, lambda _e: self.schedule_reprocess())
+        self._iw(ttk.Label(parent), note_key).grid(row=row, column=3, sticky="w", padx=10)
+        parent.columnconfigure(1, weight=1)
+
+    def _setup_var_traces(self):
+        self.black_var.trace_add("write", lambda *_: self._on_black_changed())
+        self.white_var.trace_add("write", lambda *_: self._on_white_changed())
+        self.brush_size_var.trace_add("write", lambda *_: self.on_brush_changed())
+
+    def _setup_shortcuts(self):
+        self.bind_all("<KeyPress-space>", self._space_press)
+        self.bind_all("<KeyRelease-space>", self._space_release)
+        self.bind_all("<Control-z>", lambda _e: self.undo_paint())
+        self.bind_all("<Control-y>", lambda _e: self.redo_paint())
+        self.bind_all("<Control-Shift-Z>", lambda _e: self.redo_paint())
+        self.bind_all("<KeyPress-m>", lambda _e: self.set_interaction_mode("move"))
+        self.bind_all("<KeyPress-M>", lambda _e: self.set_interaction_mode("move"))
+        self.bind_all("<KeyPress-b>", lambda _e: self.set_interaction_mode("paint"))
+        self.bind_all("<KeyPress-B>", lambda _e: self.set_interaction_mode("paint"))
+        self.bind_all("<KeyPress-x>", lambda _e: self.swap_brush_color())
+        self.bind_all("<KeyPress-X>", lambda _e: self.swap_brush_color())
+        self.bind_all("<KeyPress-bracketleft>", lambda _e: self.adjust_brush_size(-4))
+        self.bind_all("<KeyPress-bracketright>", lambda _e: self.adjust_brush_size(4))
+
+    def _space_press(self, _event=None):
+        if not self.space_down:
+            self.space_down = True
+            self._refresh_pane_cursors()
+
+    def _space_release(self, _event=None):
+        if self.space_down:
+            self.space_down = False
+            self._refresh_pane_cursors()
+
+    def _refresh_pane_cursors(self):
+        for pane_name in ("original_panel", "mask_panel", "result_panel"):
+            pane = getattr(self, pane_name, None)
+            if pane:
+                pane._update_cursor_style()
+
+    def set_interaction_mode(self, mode: str):
+        if mode not in {"move", "paint"}:
+            return
+        self.interaction_mode.set(mode)
+        self.on_mode_changed()
+
+    def on_mode_changed(self):
+        self._refresh_pane_cursors()
+        label = self.tr("mode_move") if self.interaction_mode.get() == "move" else self.tr("mode_paint")
+        self.status.set(self.tr("mode_status", mode=label))
+
+    def on_brush_changed(self):
+        try:
+            size = max(1, min(200, int(self.brush_size_var.get())))
+            if size != self.brush_size_var.get():
+                self.brush_size_var.set(size)
+        except Exception:
+            return
+        color = self.tr("white" if self.brush_color.get() == "white" else "black")
+        self.status.set(self.tr("brush_status", color=color, size=size))
+
+    def swap_brush_color(self):
+        self.brush_color.set("black" if self.brush_color.get() == "white" else "white")
+        self.on_brush_changed()
+
+    def adjust_brush_size(self, delta: int):
+        try:
+            self.brush_size_var.set(max(1, min(200, int(self.brush_size_var.get()) + delta)))
+        except Exception:
+            pass
+
+    def begin_paint_stroke(self):
+        if self.raw_mask is None:
+            return
+        self._painting_active = True
+        self._stroke_dirty = False
+        self._stroke_before = self.raw_mask.copy()
+
+    def end_paint_stroke(self):
+        if self.raw_mask is None or self._stroke_before is None:
+            self._stroke_before = None
+            self._painting_active = False
+            return
+        # Keep one undo step per drag stroke without scanning the full image with tobytes().
+        if self._stroke_dirty:
+            self.undo_stack.append(self._stroke_before)
+            if len(self.undo_stack) > self.max_history:
+                self.undo_stack.pop(0)
+            self.redo_stack.clear()
+        self._stroke_before = None
+        self._stroke_dirty = False
+        self._painting_active = False
+
+        if self._paint_preview_after is not None:
+            try:
+                self.after_cancel(self._paint_preview_after)
+            except Exception:
+                pass
+            self._paint_preview_after = None
+
+        # Mouse-up is the quality boundary: redraw once with LANCZOS/full-quality data.
+        self.after_idle(lambda: self.reprocess_preview(live_paint=False))
+
+    def paint_mask(self, start, end, button: int = 1):
+        if self.raw_mask is None:
+            return
+        selected = self.brush_color.get()
+        color_name = selected if button == 1 else ("black" if selected == "white" else "white")
+        value = 255 if color_name == "white" else 0
+        size = max(1, min(200, int(self.brush_size_var.get())))
+        radius = size / 2.0
+
+        draw = ImageDraw.Draw(self.raw_mask)
+        ex, ey = end
