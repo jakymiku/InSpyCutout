@@ -54,9 +54,27 @@
         self._draw()
 
     def _on_mousewheel(self, event):
+        # Do not zoom while the user is actively panning. This also prevents
+        # accidental tilt-wheel events from fighting middle-button dragging.
+        if self._drag_mode == "pan":
+            return "break"
+
+        # Some Windows mouse drivers report wheel tilt as Shift+MouseWheel.
+        # Ignore horizontal wheel input here; vertical wheel remains zoom-only.
+        if getattr(event, "state", 0) & 0x0001:
+            return "break"
+
+        if not getattr(event, "delta", 0):
+            return "break"
         factor = 1.1 if event.delta > 0 else 1 / 1.1
         self._zoom_at(event.x, event.y, factor)
         self._show_brush_cursor(event.x, event.y)
+        return "break"
+
+    def _on_horizontal_wheel(self, _event):
+        # Intentionally ignore left/right wheel tilt. Pan remains controlled by
+        # left-drag in Move mode, Space+left-drag, or middle-button drag.
+        return "break"
 
     def _on_linux_wheel(self, event):
         factor = 1.1 if event.num == 4 else 1 / 1.1
