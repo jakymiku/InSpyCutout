@@ -1,0 +1,44 @@
+name: Package Windows ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'dev' }
+          $stage = Join-Path $env:RUNNER_TEMP "InSpyCutout-$version"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          $items = @(
+            'InSpyCutout.py','Launch_GUI.bat','Setup.bat','setup.ps1','config.ini',
+            'requirements.txt','README.md','README_ja.md','LICENSE','THIRD_PARTY_NOTICES.md',
+            'CHANGELOG.md','tools'
+          )
+          foreach ($item in $items) { Copy-Item $item $stage -Recurse -Force }
+          Compress-Archive -Path $stage -DestinationPath "dist/InSpyCutout-$version-Windows.zip" -Force
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InSpyCutout-Windows
+          path: dist/*.zip
+
+      - name: Publish GitHub Release asset
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create $env:GITHUB_REF_NAME dist/*.zip --generate-notes --title $env:GITHUB_REF_NAME
