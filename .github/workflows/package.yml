@@ -3,6 +3,8 @@ name: Package Windows ZIP
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
@@ -15,6 +17,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python for validation
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build and syntax-check release source
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem "src/InSpyCutout.part*.py.txt" | Sort-Object Name
+          if (-not $parts) { throw "InSpyCutout source parts are missing." }
+          $source = ($parts | ForEach-Object { Get-Content -Raw -Encoding UTF8 $_.FullName }) -join ""
+          [System.IO.File]::WriteAllText("InSpyCutout.release.py", $source, [System.Text.UTF8Encoding]::new($false))
+          python -m py_compile InSpyCutout.release.py tools/preload_model.py
+
       - name: Build ZIP
         shell: pwsh
         run: |
@@ -23,11 +39,12 @@ jobs:
           $stage = Join-Path $env:RUNNER_TEMP "InSpyCutout-$version"
           New-Item -ItemType Directory -Force $stage | Out-Null
           $items = @(
-            'InSpyCutout.py','Launch_GUI.bat','Setup.bat','setup.ps1','config.ini',
+            'Launch_GUI.bat','Setup.bat','setup.ps1','config.ini',
             'requirements.txt','README.md','README_ja.md','LICENSE','THIRD_PARTY_NOTICES.md',
-            'CHANGELOG.md','tools','src'
+            'CHANGELOG.md','tools'
           )
           foreach ($item in $items) { Copy-Item $item $stage -Recurse -Force }
+          Copy-Item "InSpyCutout.release.py" (Join-Path $stage "InSpyCutout.py") -Force
           Compress-Archive -Path $stage -DestinationPath "dist/InSpyCutout-$version-Windows.zip" -Force
 
       - name: Upload workflow artifact
